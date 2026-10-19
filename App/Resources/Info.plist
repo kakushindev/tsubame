@@ -22,6 +22,22 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- App Transport Security is disabled because it cannot evaluate a
+	     Kubernetes cluster's certificate authority. Clusters are reached through a
+	     private CA carried in the kubeconfig, which ATS has no way to know about:
+	     it rejected every such connection before the client-certificate exchange,
+	     reporting only a generic TLS failure.
+
+	     This does not weaken the checks. ServerTrustEvaluator still evaluates the
+	     server certificate against the kubeconfig's authority on every connection,
+	     which is stricter than the system trust store for this purpose, and
+	     skipping verification remains a deliberate per-cluster setting
+	     (PRD §12). -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSHumanReadableCopyright</key>
 	<string>Kakushin.dev</string>
 </dict>

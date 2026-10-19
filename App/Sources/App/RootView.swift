@@ -250,13 +250,20 @@ struct WorkspaceView: View {
 
     @ViewBuilder private func compactContextTree(_ cached: ClusterSession) -> some View {
         let expanded = expansion(cached.connection.id, in: $expandedContexts)
-        navigatorDisclosure(cached.connection.contextName, expanded: expanded, depth: 0) {
+        navigatorDisclosure(
+            cached.connection.contextName,
+            expanded: expanded,
+            depth: 0,
+            // Reserved rather than overlaid: an overlay let a long context name run
+            // underneath the retry button instead of truncating before it.
+            trailingInset: cached.state == .failed ? retryWidth + 6 : 0
+        ) {
             contextRowLabel(cached)
         }
         .overlay(alignment: .trailing) {
-            // A sibling of the row rather than part of it, so retrying never also
-            // collapses the group the user is looking at.
-            if cached.state == .failed { retryButton(cached).padding(.trailing, 6) }
+            // Still a sibling of the row, so retrying never also collapses the
+            // group being looked at.
+            if cached.state == .failed { retryButton(cached).padding(.trailing, 4) }
         }
         if expanded.wrappedValue {
             ForEach(ResourceKindPresentation.Category.allCases) { category in
@@ -299,7 +306,11 @@ struct WorkspaceView: View {
     @ViewBuilder private func contextRowLabel(_ cached: ClusterSession) -> some View {
         Label {
             HStack(spacing: 4) {
-                Text(cached.connection.contextName).fontWeight(.medium)
+                Text(cached.connection.contextName)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
                 if cached.state == .failed {
                     // The shape carries the meaning, not the colour, and the
                     // message the sidebar no longer prints lives in the tooltip
@@ -307,6 +318,7 @@ struct WorkspaceView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
                         .foregroundStyle(.red)
+                        .layoutPriority(2)
                         .accessibilityLabel("Not connected: \(cached.failure ?? "unknown error")")
                 }
             }
@@ -332,8 +344,11 @@ struct WorkspaceView: View {
         .accessibilityLabel("Retry \(cached.connection.contextName)")
     }
 
+    private var retryWidth: CGFloat { usesTouchNavigation ? 44 : 22 }
+
     private func navigatorDisclosure<Content: View>(
-        _ title: String, expanded: Binding<Bool>, depth: CGFloat, @ViewBuilder label: () -> Content
+        _ title: String, expanded: Binding<Bool>, depth: CGFloat,
+        trailingInset: CGFloat = 0, @ViewBuilder label: () -> Content
     ) -> some View {
         Button { expanded.wrappedValue.toggle() } label: {
             HStack(spacing: 6) {
@@ -341,7 +356,7 @@ struct WorkspaceView: View {
                     .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).frame(width: 12)
                 label()
             }
-            .padding(.leading, depth + 8).padding(.trailing, 8)
+            .padding(.leading, depth + 8).padding(.trailing, 8 + trailingInset)
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             .contentShape(Rectangle())
         }

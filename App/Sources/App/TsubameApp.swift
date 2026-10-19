@@ -11,6 +11,7 @@ struct TsubameApp: App {
         WindowGroup {
             RootView()
                 .environment(environment)
+
         }
         .workspaceDefaultSize()
         .commands {
