@@ -143,19 +143,7 @@ struct NamespaceControl: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(matches, id: \.self) { name in
-                        let isOn = working.contains(name)
-                        Button { toggle(name) } label: {
-                            row {
-                                Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                                    .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                                    .frame(width: 14)
-                                Text(name).lineLimit(1)
-                                Spacer(minLength: 0)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .background(isOn ? Color.accentColor.opacity(0.14) : .clear)
-                        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                        namespaceRow(name)
                     }
                 }
             }
@@ -165,6 +153,42 @@ struct NamespaceControl: View {
             // taller than one row. Shows up to twelve namespaces; more scroll.
             .frame(height: min(CGFloat(matches.count), 12) * rowHeight)
         }
+    }
+
+    /// Two targets in one row, because they answer two different questions.
+    ///
+    /// The checkbox adds or removes a namespace from what is already in view and
+    /// leaves the list open, so several can be picked in one visit. The name is
+    /// the common case — look at this one — and narrows to it and closes.
+    private func namespaceRow(_ name: String) -> some View {
+        let isOn = working.contains(name)
+        return HStack(spacing: 8) {
+            Button { toggle(name) } label: {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .frame(width: 18, height: 18)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help(isOn ? "Stop showing \(name)" : "Also show \(name)")
+            .accessibilityLabel(isOn ? "Stop showing \(name)" : "Also show \(name)")
+            .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+
+            Button { showOnly(name) } label: {
+                HStack(spacing: 0) {
+                    Text(name).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("Show only \(name)")
+            .accessibilityLabel("Show only \(name)")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isOn ? Color.accentColor.opacity(0.14) : .clear)
     }
 
     private func notice(_ text: String) -> some View {
@@ -194,6 +218,14 @@ struct NamespaceControl: View {
             working.append(name)
         }
         commit()
+    }
+
+    /// Narrows to one namespace and closes, which is what picking a name means.
+    private func showOnly(_ name: String) {
+        guard !name.isEmpty else { return }
+        working = [name]
+        commit()
+        if failure == nil { showing = false }
     }
 
     /// Applies as the user picks, so the table follows the selection rather than
