@@ -190,7 +190,7 @@ actor ErasedPollingWatcher<Object: ResourceObject & Codable>: ResourceWatching {
     func snapshots() async -> AsyncStream<ErasedResourceSnapshot> {
         let upstream = await watcher.snapshots()
         let summarize = self.summarize
-        return AsyncStream { continuation in
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
                 for await snapshot in upstream {
                     continuation.yield(

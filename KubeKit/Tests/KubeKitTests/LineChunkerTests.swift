@@ -4,6 +4,15 @@ import Testing
 
 @Suite("LineChunker")
 struct LineChunkerTests {
+    @Test("Byte and chunk paths bound long terminated lines without splitting UTF-8")
+    func boundsLongTerminatedUnicode() {
+        let text = String(repeating: "燕abc", count: 2_000)
+        var chunker = LineChunker(maximumLineLength: 8192)
+        let produced = lines(of: &chunker, feeding: [Data((text + "\n").utf8)])
+        #expect(produced.allSatisfy { $0.count <= 8192 })
+        #expect(produced.map { String(decoding: $0, as: UTF8.self) }.joined() == text)
+    }
+
     private func lines(of chunker: inout LineChunker, feeding chunks: [Data]) -> [Data] {
         var produced: [Data] = []
         for chunk in chunks { produced.append(contentsOf: chunker.consume(chunk)) }

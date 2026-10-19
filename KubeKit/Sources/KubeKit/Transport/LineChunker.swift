@@ -10,8 +10,8 @@ import Foundation
 ///
 /// So: split on `0x0A` and nothing else, and force-break a line that outgrows
 /// `maximumLineLength` rather than buffering it. Because `0x0A` cannot occur inside
-/// a multi-byte UTF-8 sequence, splitting on it never divides a character — only a
-/// force-break can, and only on a line already past the limit.
+/// a multi-byte UTF-8 sequence, splitting on it never divides a character.
+/// Force-breaks retain incomplete UTF-8 bytes for the next chunk as well.
 struct LineChunker {
     /// The longest line that will be buffered. Beyond this the line is cut and the
     /// remainder continues as the next one.
@@ -38,8 +38,14 @@ struct LineChunker {
         }
         buffer.append(byte)
         if buffer.count > maximumLineLength {
-            defer { buffer = Data() }
-            return buffer
+            var cut = maximumLineLength
+            // A continuation byte belongs to the scalar starting before it.
+            // Retain that scalar rather than replacing half of it at decode time.
+            while cut > 0, buffer[buffer.startIndex + cut] & 0xC0 == 0x80 { cut -= 1 }
+            if cut == 0 { cut = maximumLineLength } // invalid UTF-8 or a limit below one scalar
+            let line = Data(buffer.prefix(cut))
+            buffer = Data(buffer.dropFirst(cut))
+            return line
         }
         return nil
     }
@@ -49,26 +55,9 @@ struct LineChunker {
     /// A chunk may complete several lines, part of one, or none at all; the
     /// remainder stays buffered for the next call.
     mutating func consume(_ chunk: Data) -> [Data] {
-        guard !chunk.isEmpty else { return [] }
-        buffer.append(chunk)
-
         var lines: [Data] = []
-        while true {
-            if let newline = buffer.firstIndex(of: 0x0A) {
-                lines.append(Data(buffer[buffer.startIndex..<newline]))
-                buffer = Data(buffer[buffer.index(after: newline)...])
-                continue
-            }
-            // No terminator in sight. Give up on the rest of this line once it is
-            // past the limit, so a container emitting megabytes without a newline
-            // cannot grow this buffer without bound.
-            if buffer.count > maximumLineLength {
-                let cut = buffer.index(buffer.startIndex, offsetBy: maximumLineLength)
-                lines.append(Data(buffer[buffer.startIndex..<cut]))
-                buffer = Data(buffer[cut...])
-                continue
-            }
-            break
+        for byte in chunk {
+            if let line = consume(byte) { lines.append(line) }
         }
         return lines
     }

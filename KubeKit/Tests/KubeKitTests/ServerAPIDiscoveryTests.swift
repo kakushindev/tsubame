@@ -6,6 +6,15 @@ import KubeTestSupport
 
 @Suite("ServerAPIDiscovery")
 struct ServerAPIDiscoveryTests {
+    @Test("Invalidating a context cancels its in-flight discovery request")
+    func invalidationCancelsDiscovery() async throws {
+        let transport = HoldingDiscoveryTransport()
+        let discovery = ServerAPIDiscovery(client: KubernetesClient(transport: transport))
+        let load = Task { try await discovery.catalog() }
+        while await transport.requestCount == 0 { await Task.yield() }
+        await discovery.invalidate()
+        await #expect(throws: CancellationError.self) { try await load.value }
+    }
     @Test("Maps groups, versions, resources, and subresources from the server")
     func mapsDiscoveryPayloads() async throws {
         let discovery = ServerAPIDiscovery(client: KubernetesClient(transport: Fixtures.transport()))
@@ -212,5 +221,17 @@ private enum Fixtures {
           {"name":"widgets","singularName":"widget","namespaced":true,"kind":"Widget",
            "verbs":["get","list","watch"]}]}
         """
+    }
+}
+
+private actor HoldingDiscoveryTransport: KubernetesTransport {
+    private(set) var requestCount = 0
+    func send(_ request: APIRequest) async throws -> APIResponse {
+        requestCount += 1
+        try await Task.sleep(for: .seconds(30))
+        throw KubernetesError.networkUnreachable(underlying: "Test transport unexpectedly resumed.")
+    }
+    func lines(for request: APIRequest) async throws -> AsyncThrowingStream<Data, any Error> {
+        AsyncThrowingStream { $0.finish() }
     }
 }

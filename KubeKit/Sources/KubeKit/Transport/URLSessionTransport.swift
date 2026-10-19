@@ -115,6 +115,17 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
     }
 
     public func lines(for request: APIRequest) async throws -> AsyncThrowingStream<Data, any Error> {
+        do {
+            return try await openLines(for: request)
+        } catch let error as KubernetesError {
+            throw error
+        } catch {
+            if Self.isCancellation(error) { throw CancellationError() }
+            throw mapped(error)
+        }
+    }
+
+    private func openLines(for request: APIRequest) async throws -> AsyncThrowingStream<Data, any Error> {
         if let proxyFailure { throw proxyFailure }
         var streaming = request
         streaming.timeout = nil
@@ -122,12 +133,17 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
 
         let (byteStream, response) = try await streamingSession.bytes(for: urlRequest)
         guard let http = response as? HTTPURLResponse else {
+            byteStream.task.cancel()
             throw KubernetesError.decodingFailure(reason: "The response was not an HTTP response.")
         }
         guard (200..<300).contains(http.statusCode) else {
+            defer { byteStream.task.cancel() }
             // A failed stream still carries a Status body; read it before giving up.
             var body = Data()
-            for try await byte in byteStream { body.append(byte) }
+            for try await byte in byteStream {
+                body.append(byte)
+                if body.count >= APIRequest.defaultMaximumLineLength { break }
+            }
             throw errorMapper.error(
                 statusCode: http.statusCode,
                 headers: Self.headerFields(of: http),
@@ -136,16 +152,31 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
         }
 
         let limit = request.maximumLineLength
-        return AsyncThrowingStream { continuation in
+        return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(64)) { continuation in
             let task = Task {
+                defer { byteStream.task.cancel() }
                 var chunker = LineChunker(maximumLineLength: limit)
                 do {
                     for try await byte in byteStream {
-                        if let line = chunker.consume(byte) { continuation.yield(line) }
+                        try Task.checkCancellation()
+                        if let line = chunker.consume(byte),
+                           case .dropped = continuation.yield(line) {
+                            // Never silently skip watch events or log output. The
+                            // caller resumes from its last consumed version/time.
+                            continuation.finish(throwing: KubernetesError.streamInterrupted(
+                                underlying: "The stream exceeded the consumer's buffer; reconnecting."
+                            ))
+                            return
+                        }
                     }
                     // A stream may end mid-line; that partial line is still data the
                     // caller asked for.
-                    if let trailing = chunker.flush() { continuation.yield(trailing) }
+                    if let trailing = chunker.flush(), case .dropped = continuation.yield(trailing) {
+                        continuation.finish(throwing: KubernetesError.streamInterrupted(
+                            underlying: "The stream exceeded the consumer's buffer; reconnecting."
+                        ))
+                        return
+                    }
                     continuation.finish()
                 } catch {
                     // A cancelled stream is a closed view, not a failure: finish
@@ -157,7 +188,7 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
                     continuation.finish(throwing: self.mapped(error))
                 }
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.onTermination = { _ in task.cancel(); byteStream.task.cancel() }
         }
     }
 

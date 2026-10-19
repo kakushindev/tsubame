@@ -11,6 +11,7 @@ let package = Package(
         // macOS only: everything inside is behind `#if os(macOS)`, so linking it
         // on iOS yields an empty module rather than a build error.
         .library(name: "KubeExec", targets: ["KubeExec"]),
+        .library(name: "KubeTestSupport", targets: ["KubeTestSupport"]),
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),

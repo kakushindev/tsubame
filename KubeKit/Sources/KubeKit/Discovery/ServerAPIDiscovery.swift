@@ -27,9 +27,15 @@ public actor ServerAPIDiscovery: APIDiscovering {
 
     @discardableResult
     public func refresh() async throws -> APIResourceCatalog {
-        cached = nil
-        inFlight = nil
+        await invalidate()
         return try await load()
+    }
+
+    public func invalidate() async {
+        generation += 1
+        inFlight?.cancel()
+        inFlight = nil
+        cached = nil
     }
 
     public func resource(forKind kind: String, inGroup group: String?) async throws -> DiscoveredResource {
@@ -91,6 +97,7 @@ public actor ServerAPIDiscovery: APIDiscovering {
         // first version it lists is treated as preferred. In practice that is v1.
         let coreVersions = try await decode(APIVersions.self, atPath: "/api").versions
         for (index, version) in coreVersions.enumerated() {
+            try Task.checkCancellation()
             let groupVersion = GroupVersion(group: "", version: version)
             groupVersions.append(groupVersion)
             switch await resourceList(for: groupVersion, isPreferred: index == 0) {
@@ -101,8 +108,10 @@ public actor ServerAPIDiscovery: APIDiscovering {
 
         let groups = try await decode(APIGroupList.self, atPath: "/apis").groups
         for group in groups {
+            try Task.checkCancellation()
             let preferred = group.preferredVersion?.parsed
             for description in group.versions {
+                try Task.checkCancellation()
                 let groupVersion = description.parsed
                 groupVersions.append(groupVersion)
                 switch await resourceList(for: groupVersion, isPreferred: groupVersion == preferred) {

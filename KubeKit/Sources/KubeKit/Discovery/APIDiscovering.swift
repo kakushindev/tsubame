@@ -18,6 +18,9 @@ public protocol APIDiscovering: Sendable {
     @discardableResult
     func refresh() async throws -> APIResourceCatalog
 
+    /// Ends the owning context's discovery work and discards its cached catalog.
+    func invalidate() async
+
     /// The endpoint for a kind, preferring the server's preferred version.
     ///
     /// Throws `KubernetesError.permissionDenied` when the kind is absent only
@@ -27,6 +30,8 @@ public protocol APIDiscovering: Sendable {
 }
 
 extension APIDiscovering {
+    public func invalidate() async {}
+
     public func resource(forKind kind: String) async throws -> DiscoveredResource {
         try await resource(forKind: kind, inGroup: nil)
     }
