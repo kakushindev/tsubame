@@ -40,3 +40,6 @@ xcuserdata/
 
 # Belt and braces: no credential rule may ever exclude source.
 !*.swift
+
+# Coverage output from a test run
+*.profraw
