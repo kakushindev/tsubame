@@ -27,6 +27,9 @@ struct NamespaceControl: View {
     @State private var options: Options = .loading
     @State private var working: [String] = []
     @FocusState private var searchFocused: Bool
+    /// Tracks the text size, so the list's height is a number of rows rather than
+    /// a guess that truncates at larger Dynamic Type settings.
+    @ScaledMetric(relativeTo: .callout) private var rowHeight = 29
 
     /// "default", or "default +2" once several are in view.
     static func scopeLabel(_ namespaces: [String]) -> String {
@@ -149,9 +152,10 @@ struct NamespaceControl: View {
                 }
             }
             // Tall enough to browse, short enough that the popover stays a control.
-            // Tall enough to scan a cluster's namespaces without scrolling for
-            // most of them; a cluster with dozens still scrolls.
-            .frame(maxHeight: 460)
+            // An explicit height, because `maxHeight` only caps a ScrollView and
+            // leaves it as short as its content — which is why this opened barely
+            // taller than one row. Shows up to twelve namespaces; more scroll.
+            .frame(height: min(CGFloat(matches.count), 12) * rowHeight)
         }
     }
 
