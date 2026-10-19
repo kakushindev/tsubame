@@ -1,0 +1,29 @@
+# Xcode project is generated from project.yml by XcodeGen.
+*.xcodeproj/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+
+# Build products and derived data
+.build/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+# Package.resolved is committed on purpose: the app's dependency versions must be
+# reproducible.
+
+# macOS
+.DS_Store
+
+# Local credentials and cluster configuration must never be committed.
+*.kubeconfig
+kubeconfig
+.kube/

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tsubame — Flight Progress Strips</title>
+<style>
+:root{--slate:#2B3138;--slate2:#353C45;--strip:#FAFAF7;--blue:#3A7BD5;--amber:#E8B23A;--green:#5BA16B;--red:#C9372C;--mute:#6B7480;--rule:#DADDD6}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:13px/1.35 -apple-system,system-ui,sans-serif;background:var(--slate);color:#1E2328;display:grid;grid-template-columns:220px 1fr 330px;grid-template-rows:52px 1fr}
+.tb{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px 0 84px;background:#1F242A;color:#E9ECEF;position:relative}
+.lights{position:absolute;left:16px;top:20px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i+i{background:#FEBC2E}.lights i+i+i{background:#28C840}
+.pill{background:var(--slate2);border-radius:7px;padding:5px 10px;font-weight:600}.pill small{font-weight:400;color:#9AA3AD;margin-right:4px}
+.live{margin-left:auto;color:#B8C0C8}.live::before{content:"● ";color:var(--green)}
+.side{padding:12px 10px;color:#C9D0D6}
+.side h6{font-size:11px;color:#8A939C;margin:12px 8px 4px;letter-spacing:.06em}
+.side a{display:flex;justify-content:space-between;padding:5px 8px;border-radius:6px}.side a.on{background:var(--blue);color:#fff}
+main{padding:16px 18px;overflow:hidden}
+h1{color:#fff;font-size:26px;margin-bottom:12px}
+.bay{background:#21262C;border-radius:8px;padding:8px 8px 4px;margin-bottom:12px}
+.bay h4{color:#AEB6BF;font-size:11px;font-weight:600;letter-spacing:.05em;margin:0 4px 6px;display:flex;justify-content:space-between}
+.s{display:grid;grid-template-columns:8px 1fr 130px 60px 70px 60px;align-items:center;gap:12px;background:var(--strip);border-radius:3px;margin-bottom:4px;padding:6px 10px 6px 0;font-variant-numeric:tabular-nums}
+.s::before{content:"";align-self:stretch;background:var(--green);border-radius:3px 0 0 3px}
+.s.w::before{background:var(--amber)}.s.x::before{background:var(--red)}
+.s.sel{outline:2px solid var(--blue)}
+.n{font-family:ui-monospace,"SF Mono",monospace;font-size:12px}
+.g{font-family:"Marker Felt",cursive;color:var(--red);font-size:15px}
+.m{color:var(--mute)}
+aside{background:var(--strip);padding:18px}
+aside h2{font-family:ui-monospace,monospace;font-size:16px;word-break:break-all}
+aside p{color:var(--mute);margin:4px 0 14px}
+dl{display:grid;grid-template-columns:100px 1fr;gap:7px}dt{color:var(--mute)}
+</style></head><body>
+<div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="pill"><small>Context</small>gke-prod-eu-west1</div><div class="pill"><small>Namespace</small>checkout</div><span class="live">Live · 2s ago</span></div>
+<nav class="side"><h6>WORKLOADS</h6><a class="on">Pods<b>24</b></a><a>Deployments<b>7</b></a><a>StatefulSets<b>2</b></a><a>DaemonSets<b>1</b></a><a>Jobs<b>3</b></a><a>CronJobs<b>2</b></a><h6>NETWORK</h6><a>Services<b>9</b></a><h6>CONFIG</h6><a>ConfigMaps<b>14</b></a><a>Secrets<b>11</b></a><h6>CLUSTER</h6><a>Namespaces<b>18</b></a><a>Events<b>136</b></a></nav>
+<main><h1>Pods</h1>
+<div class="bay"><h4><span>DEPLOYMENT payments-worker</span><span>0/1 ready</span></h4>
+<div class="s x"><span class="n">payments-worker-5c8d7f9b4-qm2tz</span><span>CrashLoopBackOff</span><span class="g">×14</span><span>0/1</span><span class="m">2h</span></div></div>
+<div class="bay"><h4><span>DEPLOYMENT checkout-api</span><span>3/3 ready</span></h4>
+<div class="s sel"><span class="n">checkout-api-7d9f8b6c5-x2kqp</span><span>Running</span><span></span><span>2/2</span><span class="m">4h</span></div>
+<div class="s"><span class="n">checkout-api-7d9f8b6c5-h8vnw</span><span>Running</span><span></span><span>2/2</span><span class="m">4h</span></div>
+<div class="s"><span class="n">checkout-api-7d9f8b6c5-p4lrd</span><span>Running</span><span class="g">×1</span><span>2/2</span><span class="m">4h</span></div></div>
+<div class="bay"><h4><span>DEPLOYMENT cart-svc</span><span>1/2 ready</span></h4>
+<div class="s"><span class="n">cart-svc-66b4d8c7f-9wq7s</span><span>Running</span><span></span><span>1/1</span><span class="m">1d</span></div>
+<div class="s w"><span class="n">cart-svc-66b4d8c7f-tz5mk</span><span>Pending</span><span></span><span>0/1</span><span class="m">38s</span></div></div>
+<div class="bay"><h4><span>STATEFULSET redis-cart</span><span>2/2 ready</span></h4>
+<div class="s"><span class="n">redis-cart-0</span><span>Running</span><span></span><span>1/1</span><span class="m">9d</span></div>
+<div class="s"><span class="n">redis-cart-1</span><span>Running</span><span></span><span>1/1</span><span class="m">9d</span></div></div>
+<div class="bay"><h4><span>DEPLOYMENT pricing-engine</span><span>2/2 ready</span></h4>
+<div class="s"><span class="n">pricing-engine-84f6c9d77-lk3jn</span><span>Running</span><span class="g">×2</span><span>1/1</span><span class="m">3d</span></div>
+<div class="s"><span class="n">pricing-engine-84f6c9d77-r7c2v</span><span>Running</span><span></span><span>1/1</span><span class="m">3d</span></div></div>
+</main>
+<aside><h2>checkout-api-7d9f8b6c5-x2kqp</h2><p>Pod · ReplicaSet checkout-api-7d9f8b6c5</p>
+<dl><dt>Node</dt><dd>gke-pool-a-91c2</dd><dt>Pod IP</dt><dd>10.48.3.117</dd><dt>QoS</dt><dd>Burstable</dd><dt>Containers</dt><dd>api, envoy</dd><dt>Started</dt><dd>Today 10:14</dd></dl></aside>
+</body></html>

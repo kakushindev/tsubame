@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tsubame — Swallows on the Wire</title>
+<style>
+:root{--steel:#1C2B48;--steel2:#24375C;--iris:#2F5DA8;--ring:#C9CED6;--belly:#F6F7F9;--rufous:#B4502E;--ink:#141B29;--mute:#5E6878;--rule:#E3E6EB;--ok:#2E8B57;--warn:#C98A14;--bad:#C62828}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:13px/1.35 -apple-system,"SF Pro Text",system-ui,sans-serif;color:var(--ink);background:var(--belly);display:grid;grid-template-columns:232px 1fr 340px;grid-template-rows:52px 1fr}
+.tb{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 16px 0 84px;background:var(--steel);color:#fff;position:relative}
+.lights{position:absolute;left:16px;top:20px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i+i{background:#FEBC2E}.lights i+i+i{background:#28C840}
+.scope{display:flex;align-items:center;gap:6px;background:var(--steel2);border:1px solid #33497A;border-radius:7px;padding:5px 10px;font-weight:600}
+.scope small{font-weight:400;color:var(--ring);margin-right:4px}
+.sep{color:#6F83AD}
+.fresh{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--ring)}
+.dot{width:8px;height:8px;border-radius:50%;background:#5FD08A;box-shadow:0 0 0 3px rgba(95,208,138,.2)}
+.search{width:220px;background:var(--steel2);border:1px solid #33497A;border-radius:7px;padding:5px 10px;color:#9FB0D0}
+.side{background:var(--steel);color:#DCE3F0;padding:10px 10px;border-top:1px solid #2A3D63}
+.side h6{font-size:11px;letter-spacing:.06em;color:#8FA2C8;margin:14px 8px 4px;font-weight:600}
+.side a{display:flex;justify-content:space-between;padding:5px 8px;border-radius:6px;color:inherit;text-decoration:none}
+.side a b{font-weight:400;color:#8FA2C8;font-variant-numeric:tabular-nums}
+.side a.on{background:var(--iris);color:#fff}.side a.on b{color:#DCE6FA}
+main{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--rule)}
+.head{padding:18px 22px 10px;display:flex;align-items:baseline;gap:12px}
+.head h1{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.head span{color:var(--mute)}
+.wire{margin:0 22px 6px;height:46px;position:relative}
+.wire .line{position:absolute;left:0;right:0;top:30px;height:2px;background:var(--steel)}
+.wire .gap{position:absolute;left:61%;width:8%;top:30px;height:2px;background:repeating-linear-gradient(90deg,var(--steel) 0 4px,transparent 4px 8px)}
+.wire i{position:absolute;top:16px;width:3px;height:14px;background:var(--steel);border-radius:2px}
+.wire i.m{background:var(--warn)}.wire i.x{background:var(--bad);height:18px;top:12px}
+.wire .lab{position:absolute;top:36px;font-size:10px;color:var(--mute)}
+.strip{display:flex;gap:8px;margin:2px 22px 12px}
+.strip div{flex:1;border-radius:6px;padding:8px 10px;background:#fff;border:1px solid var(--rule)}
+.strip b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.strip .r b{color:var(--ok)}.strip .p b{color:var(--warn)}.strip .f b{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:11px;font-weight:600;color:var(--mute);text-align:left;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--belly)}
+td{padding:7px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td:first-child,th:first-child{padding-left:22px}
+.ring{font-family:"SF Mono",ui-monospace,monospace;font-size:12px}
+.ph{display:inline-flex;align-items:center;gap:6px}.ph::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--ok)}
+.ph.w::before{background:var(--warn)}.ph.x::before{background:var(--bad)}
+tr.sel{background:#E7EEFA}tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--iris)}
+tr.bad td{color:var(--bad)}
+.seen{color:var(--mute)}
+aside{background:#fff;padding:18px 20px;overflow:hidden}
+aside h2{font-size:17px;font-family:"SF Mono",ui-monospace,monospace;font-weight:600;word-break:break-all}
+aside .k{color:var(--mute);margin:4px 0 14px}
+.life{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:16px}
+.life div{height:6px;border-radius:3px;background:var(--rule)}.life div.d{background:var(--ok)}
+.life span{font-size:10px;color:var(--mute)}
+dl{display:grid;grid-template-columns:110px 1fr;gap:7px 10px;margin-bottom:18px}dt{color:var(--mute)}dd{font-variant-numeric:tabular-nums}
+.sight h3{font-size:12px;font-weight:600;color:var(--mute);margin-bottom:6px}
+.sight li{list-style:none;display:grid;grid-template-columns:62px 1fr;gap:8px;padding:5px 0;border-top:1px solid var(--rule)}
+.sight time{color:var(--mute);font-variant-numeric:tabular-nums}
+.acts{display:flex;gap:8px;margin-top:16px}.acts button{font:inherit;padding:5px 12px;border-radius:6px;border:1px solid var(--rule);background:#fff}
+.acts .pend{border-color:var(--rufous);color:var(--rufous)}
+</style></head><body>
+<div class="tb"><div class="lights"><i></i><i></i><i></i></div>
+<div class="scope"><small>Context</small>gke-prod-eu-west1</div><span class="sep">/</span>
+<div class="scope"><small>Namespace</small>checkout</div>
+<div class="fresh"><span class="dot"></span>Live · last event 2s ago</div>
+<div class="search">Search pods</div></div>
+<nav class="side">
+<h6>WORKLOADS</h6><a class="on">Pods<b>24</b></a><a>Deployments<b>7</b></a><a>StatefulSets<b>2</b></a><a>DaemonSets<b>1</b></a><a>Jobs<b>3</b></a><a>CronJobs<b>2</b></a>
+<h6>NETWORK</h6><a>Services<b>9</b></a>
+<h6>CONFIG</h6><a>ConfigMaps<b>14</b></a><a>Secrets<b>11</b></a>
+<h6>CLUSTER</h6><a>Namespaces<b>18</b></a><a>Events<b>136</b></a>
+<h6>CUSTOM RESOURCES</h6><a>certificates.cert-manager.io<b>4</b></a><a>rollouts.argoproj.io<b>3</b></a>
+</nav>
+<main>
+<div class="head"><h1>Pods</h1><span>24 in checkout</span></div>
+<div class="wire"><div class="line"></div><div class="gap"></div>
+<i style="left:4%"></i><i style="left:9%"></i><i style="left:10.5%"></i><i style="left:18%"></i><i class="m" style="left:27%"></i><i style="left:33%"></i><i style="left:41%"></i><i class="x" style="left:48%"></i><i style="left:54%"></i><i style="left:58%"></i><i class="x" style="left:72%"></i><i style="left:79%"></i><i style="left:88%"></i><i style="left:97%"></i>
+<span class="lab" style="left:0">10 min ago</span><span class="lab" style="left:61%">reconnected 14:02</span><span class="lab" style="right:0">now</span></div>
+<div class="strip"><div class="r"><b>21</b>Running</div><div class="p"><b>2</b>Pending</div><div class="f"><b>1</b>Failing</div><div><b>0</b>Succeeded</div></div>
+<table><tr><th>Name</th><th>Phase</th><th>Ready</th><th>Restarts</th><th>Node</th><th>Age</th><th>Last seen</th></tr>
+<tr class="bad"><td class="ring">payments-worker-5c8d7f9b4-qm2tz</td><td><span class="ph x">CrashLoopBackOff</span></td><td>0/1</td><td>14</td><td>gke-pool-b-3f1a</td><td>2h</td><td class="seen">6s</td></tr>
+<tr class="sel"><td class="ring">checkout-api-7d9f8b6c5-x2kqp</td><td><span class="ph">Running</span></td><td>2/2</td><td>0</td><td>gke-pool-a-91c2</td><td>4h</td><td class="seen">2s</td></tr>
+<tr><td class="ring">checkout-api-7d9f8b6c5-h8vnw</td><td><span class="ph">Running</span></td><td>2/2</td><td>0</td><td>gke-pool-a-7b0e</td><td>4h</td><td class="seen">2s</td></tr>
+<tr><td class="ring">checkout-api-7d9f8b6c5-p4lrd</td><td><span class="ph">Running</span></td><td>2/2</td><td>1</td><td>gke-pool-b-3f1a</td><td>4h</td><td class="seen">41s</td></tr>
+<tr><td class="ring">cart-svc-66b4d8c7f-9wq7s</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>1d</td><td class="seen">1m</td></tr>
+<tr><td class="ring">cart-svc-66b4d8c7f-tz5mk</td><td><span class="ph w">Pending</span></td><td>0/1</td><td>0</td><td>—</td><td>38s</td><td class="seen">3s</td></tr>
+<tr><td class="ring">inventory-sync-28467120-bq9xd</td><td><span class="ph w">Pending</span></td><td>0/1</td><td>0</td><td>—</td><td>12s</td><td class="seen">4s</td></tr>
+<tr><td class="ring">redis-cart-0</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>9d</td><td class="seen">3m</td></tr>
+<tr><td class="ring">redis-cart-1</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-c-5e8a</td><td>9d</td><td class="seen">3m</td></tr>
+<tr><td class="ring">pricing-engine-84f6c9d77-lk3jn</td><td><span class="ph">Running</span></td><td>1/1</td><td>2</td><td>gke-pool-a-7b0e</td><td>3d</td><td class="seen">58s</td></tr>
+<tr><td class="ring">pricing-engine-84f6c9d77-r7c2v</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-b-3f1a</td><td>3d</td><td class="seen">58s</td></tr>
+<tr><td class="ring">fluent-bit-k2m8p</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>21d</td><td class="seen">7m</td></tr>
+<tr><td class="ring">promo-banner-5f7b9c6d8-xn4gq</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>6d</td><td class="seen">4m</td></tr>
+<tr><td class="ring">webhook-relay-6d9c5b7f4-zp8tw</td><td><span class="ph">Running</span></td><td>1/1</td><td>0</td><td>gke-pool-b-3f1a</td><td>12d</td><td class="seen">9m</td></tr>
+</table></main>
+<aside><h2>checkout-api-7d9f8b6c5-x2kqp</h2><p class="k">Pod · owned by ReplicaSet checkout-api-7d9f8b6c5</p>
+<div class="life"><div class="d"></div><div class="d"></div><div></div><div></div><span>Pending</span><span>Running</span><span>Succeeded</span><span>Failed</span></div>
+<dl><dt>Node</dt><dd>gke-pool-a-91c2</dd><dt>Pod IP</dt><dd>10.48.3.117</dd><dt>QoS</dt><dd>Burstable</dd><dt>Containers</dt><dd>api, envoy</dd><dt>Started</dt><dd>Today 10:14</dd><dt>resourceVersion</dt><dd>48211937</dd></dl>
+<div class="sight"><h3>SIGHTINGS</h3><ul>
+<li><time>14:06:12</time>Readiness probe passed</li><li><time>14:02:40</time>Watch reconnected, relisted</li><li><time>10:14:31</time>Started container envoy</li><li><time>10:14:29</time>Started container api</li><li><time>10:14:02</time>Scheduled to gke-pool-a-91c2</li></ul></div>
+<div class="acts"><button>Logs</button><button>YAML</button><button class="pend">Delete…</button></div>
+</aside></body></html>

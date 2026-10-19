@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tsubame — Midnight Transit Diagram</title>
+<style>
+:root{--night:#14213D;--night2:#1B2B4F;--porc:#F2F0EA;--cobalt:#1F5FD1;--amber:#F2A541;--green:#2E9E5B;--red:#D7263D;--mute:#8C97AE}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:13px/1.35 -apple-system,system-ui,sans-serif;background:var(--night);color:var(--porc);display:grid;grid-template-columns:220px 1fr 320px;grid-template-rows:52px 1fr}
+.tb{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px 0 84px;background:#0E182E;position:relative}
+.lights{position:absolute;left:16px;top:20px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i+i{background:#FEBC2E}.lights i+i+i{background:#28C840}
+.pill{background:var(--night2);border-radius:7px;padding:5px 10px;font-weight:600}.pill small{font-weight:400;color:var(--mute);margin-right:4px}
+.live{margin-left:auto;color:var(--mute)}
+.side{padding:12px 10px}.side h6{font-size:11px;color:var(--mute);margin:12px 8px 4px}.side a{display:block;padding:5px 8px;border-radius:6px}.side a.on{background:var(--cobalt)}
+main{padding:18px 22px}
+h1{font-size:26px;margin-bottom:14px}
+.row{display:grid;grid-template-columns:200px 1fr 90px;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid #24345A}
+.row b{display:block}.row small{color:var(--mute)}
+.line{position:relative;height:28px}
+.line .tr{position:absolute;top:13px;left:0;right:0;height:4px;border-radius:2px;background:var(--c)}
+.line i{position:absolute;top:7px;width:16px;height:16px;border-radius:50%;background:var(--porc);border:4px solid var(--c)}
+.line i.x{border-color:var(--red);background:var(--red)}.line i.w{border-color:var(--amber)}
+.row.sel{background:rgba(31,95,209,.18);margin:0 -22px;padding-left:22px;padding-right:22px}
+aside{background:var(--night2);padding:18px}
+aside h2{font-size:17px}aside p{color:var(--mute);margin:4px 0 16px}
+dl{display:grid;grid-template-columns:100px 1fr;gap:7px}dt{color:var(--mute)}
+</style></head><body>
+<div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="pill"><small>Context</small>gke-prod-eu-west1</div><div class="pill"><small>Namespace</small>checkout</div><span class="live">Live · 2s ago</span></div>
+<nav class="side"><h6>WORKLOADS</h6><a>Pods</a><a class="on">Deployments</a><a>StatefulSets</a><a>DaemonSets</a><a>Jobs</a><a>CronJobs</a><h6>NETWORK</h6><a>Services</a><h6>CONFIG</h6><a>ConfigMaps</a><a>Secrets</a><h6>CLUSTER</h6><a>Namespaces</a><a>Events</a></nav>
+<main><h1>Deployments</h1>
+<div class="row"><div><b>payments-worker</b><small>0/1 ready · rev 12</small></div><div class="line" style="--c:var(--red)"><div class="tr" style="right:88%"></div><i class="x" style="left:0"></i></div><small>2h</small></div>
+<div class="row sel"><div><b>checkout-api</b><small>3/3 ready · rev 41</small></div><div class="line" style="--c:var(--cobalt)"><div class="tr" style="right:62%"></div><i style="left:0"></i><i style="left:15%"></i><i style="left:30%"></i></div><small>4h</small></div>
+<div class="row"><div><b>cart-svc</b><small>1/2 ready · rev 9</small></div><div class="line" style="--c:var(--green)"><div class="tr" style="right:77%"></div><i style="left:0"></i><i class="w" style="left:15%"></i></div><small>1d</small></div>
+<div class="row"><div><b>pricing-engine</b><small>2/2 ready · rev 18</small></div><div class="line" style="--c:var(--amber)"><div class="tr" style="right:77%"></div><i style="left:0"></i><i style="left:15%"></i></div><small>3d</small></div>
+<div class="row"><div><b>promo-banner</b><small>1/1 ready · rev 3</small></div><div class="line" style="--c:var(--green)"><div class="tr" style="right:92%"></div><i style="left:0"></i></div><small>6d</small></div>
+<div class="row"><div><b>webhook-relay</b><small>1/1 ready · rev 5</small></div><div class="line" style="--c:var(--cobalt)"><div class="tr" style="right:92%"></div><i style="left:0"></i></div><small>12d</small></div>
+<div class="row"><div><b>search-indexer</b><small>2/2 ready · rev 7</small></div><div class="line" style="--c:var(--amber)"><div class="tr" style="right:77%"></div><i style="left:0"></i><i style="left:15%"></i></div><small>15d</small></div>
+</main>
+<aside><h2>checkout-api</h2><p>Deployment · 3 replicas · RollingUpdate</p><dl><dt>Image</dt><dd>checkout-api:2.14.1</dd><dt>Strategy</dt><dd>25% surge</dd><dt>Selector</dt><dd>app=checkout-api</dd><dt>Updated</dt><dd>Today 10:14</dd></dl></aside>
+</body></html>

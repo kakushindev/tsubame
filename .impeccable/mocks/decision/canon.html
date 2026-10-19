@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tsubame — Category standard</title>
+<style>
+:root{--bg:#F5F5F7;--ink:#1D1D1F;--mute:#6E6E73;--rule:#E5E5EA;--blue:#0A84FF;--green:#34C759;--orange:#FF9F0A;--red:#FF3B30}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:13px/1.35 -apple-system,system-ui,sans-serif;color:var(--ink);background:#fff;display:grid;grid-template-columns:220px 1fr 320px;grid-template-rows:52px 1fr}
+.tb{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:0 16px 0 84px;background:var(--bg);border-bottom:1px solid var(--rule);position:relative}
+.lights{position:absolute;left:16px;top:20px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i+i{background:#FEBC2E}.lights i+i+i{background:#28C840}
+.pop{border:1px solid var(--rule);background:#fff;border-radius:6px;padding:4px 10px}
+.live{margin-left:auto;color:var(--mute)}
+.side{background:var(--bg);padding:10px;border-right:1px solid var(--rule)}.side h6{font-size:11px;color:var(--mute);margin:12px 8px 4px}
+.side a{display:flex;justify-content:space-between;padding:4px 8px;border-radius:6px}.side a.on{background:#DCDCE0}
+main{border-right:1px solid var(--rule)}
+h1{font-size:22px;padding:16px 20px 10px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{text-align:left;color:var(--mute);font-weight:500;padding:5px 10px;border-bottom:1px solid var(--rule)}
+td{padding:6px 10px;white-space:nowrap}tr:nth-child(odd) td{background:#FAFAFC}
+td:first-child,th:first-child{padding-left:20px}
+.d{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px}.d.w{background:var(--orange)}.d.x{background:var(--red)}
+tr.sel td{background:var(--blue);color:#fff}
+aside{padding:18px;background:var(--bg)}aside h2{font-size:16px;word-break:break-all}aside p{color:var(--mute);margin:4px 0 14px}
+dl{display:grid;grid-template-columns:100px 1fr;gap:7px}dt{color:var(--mute)}
+</style></head><body>
+<div class="tb"><div class="lights"><i></i><i></i><i></i></div><span class="pop">gke-prod-eu-west1 ▾</span><span class="pop">checkout ▾</span><span class="live">Updated 2s ago</span></div>
+<nav class="side"><h6>Workloads</h6><a class="on">Pods<b>24</b></a><a>Deployments<b>7</b></a><a>StatefulSets<b>2</b></a><a>DaemonSets<b>1</b></a><a>Jobs<b>3</b></a><a>CronJobs<b>2</b></a><h6>Network</h6><a>Services<b>9</b></a><h6>Config</h6><a>ConfigMaps<b>14</b></a><a>Secrets<b>11</b></a><h6>Cluster</h6><a>Namespaces<b>18</b></a><a>Events<b>136</b></a></nav>
+<main><h1>Pods</h1>
+<table><tr><th>Name</th><th>Status</th><th>Ready</th><th>Restarts</th><th>Node</th><th>Age</th></tr>
+<tr><td><span class="d x"></span>payments-worker-5c8d7f9b4-qm2tz</td><td>CrashLoopBackOff</td><td>0/1</td><td>14</td><td>gke-pool-b-3f1a</td><td>2h</td></tr>
+<tr class="sel"><td><span class="d"></span>checkout-api-7d9f8b6c5-x2kqp</td><td>Running</td><td>2/2</td><td>0</td><td>gke-pool-a-91c2</td><td>4h</td></tr>
+<tr><td><span class="d"></span>checkout-api-7d9f8b6c5-h8vnw</td><td>Running</td><td>2/2</td><td>0</td><td>gke-pool-a-7b0e</td><td>4h</td></tr>
+<tr><td><span class="d"></span>checkout-api-7d9f8b6c5-p4lrd</td><td>Running</td><td>2/2</td><td>1</td><td>gke-pool-b-3f1a</td><td>4h</td></tr>
+<tr><td><span class="d"></span>cart-svc-66b4d8c7f-9wq7s</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>1d</td></tr>
+<tr><td><span class="d w"></span>cart-svc-66b4d8c7f-tz5mk</td><td>Pending</td><td>0/1</td><td>0</td><td>—</td><td>38s</td></tr>
+<tr><td><span class="d w"></span>inventory-sync-28467120-bq9xd</td><td>Pending</td><td>0/1</td><td>0</td><td>—</td><td>12s</td></tr>
+<tr><td><span class="d"></span>redis-cart-0</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>9d</td></tr>
+<tr><td><span class="d"></span>redis-cart-1</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-5e8a</td><td>9d</td></tr>
+<tr><td><span class="d"></span>pricing-engine-84f6c9d77-lk3jn</td><td>Running</td><td>1/1</td><td>2</td><td>gke-pool-a-7b0e</td><td>3d</td></tr>
+<tr><td><span class="d"></span>pricing-engine-84f6c9d77-r7c2v</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-b-3f1a</td><td>3d</td></tr>
+<tr><td><span class="d"></span>fluent-bit-k2m8p</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>21d</td></tr>
+<tr><td><span class="d"></span>promo-banner-5f7b9c6d8-xn4gq</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>6d</td></tr>
+</table></main>
+<aside><h2>checkout-api-7d9f8b6c5-x2kqp</h2><p>Pod · ReplicaSet checkout-api-7d9f8b6c5</p><dl><dt>Node</dt><dd>gke-pool-a-91c2</dd><dt>Pod IP</dt><dd>10.48.3.117</dd><dt>QoS</dt><dd>Burstable</dd><dt>Containers</dt><dd>api, envoy</dd></dl></aside>
+</body></html>

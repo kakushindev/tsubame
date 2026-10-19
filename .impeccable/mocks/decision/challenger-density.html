@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tsubame — High-Density Modules</title>
+<style>
+:root{--red:#E60012;--ink:#111;--g:#D9D9D9;--g2:#F2F2F2;--mute:#666}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:12px/1.3 -apple-system,system-ui,sans-serif;background:#fff;color:var(--ink);display:grid;grid-template-columns:200px 1fr;grid-template-rows:44px 1fr}
+.tb{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:0 12px 0 84px;border-bottom:1px solid var(--g);position:relative;background:var(--g2)}
+.lights{position:absolute;left:16px;top:16px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i+i{background:#FEBC2E}.lights i+i+i{background:#28C840}
+.pill{border:1px solid var(--g);background:#fff;padding:3px 8px;font-weight:600}.pill small{color:var(--mute);font-weight:400;margin-right:4px}
+.live{margin-left:auto;color:var(--mute)}
+.side{border-right:1px solid var(--g);padding:6px}.side h6{background:var(--red);color:#fff;font-size:10px;padding:2px 6px;margin:8px 0 2px;display:inline-block}
+.side a{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px solid var(--g2)}.side a.on{background:#FFE9EB;font-weight:600}
+main{padding:8px;overflow:hidden}
+.mods{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid var(--g);margin-bottom:8px}
+.mod{border-right:1px solid var(--g);padding:6px 8px}.mod:last-child{border-right:0}
+.mod h5{display:inline-block;background:var(--ink);color:#fff;font-size:10px;padding:1px 5px;margin-bottom:4px}
+.mod b{font-size:24px;display:block;font-variant-numeric:tabular-nums}.mod.x b{color:var(--red)}
+table{width:100%;border-collapse:collapse;border:1px solid var(--g);font-variant-numeric:tabular-nums}
+th{background:var(--g2);text-align:left;font-size:11px;padding:3px 6px;border:1px solid var(--g)}
+td{padding:3px 6px;border:1px solid var(--g);white-space:nowrap}
+tr.x td{color:var(--red);font-weight:600}
+.n{font-family:ui-monospace,monospace;font-size:11px}
+</style></head><body>
+<div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="pill"><small>Context</small>gke-prod-eu-west1</div><div class="pill"><small>Namespace</small>checkout</div><span class="live">Live · 2s ago</span></div>
+<nav class="side"><h6>WORKLOADS</h6><a class="on">Pods<b>24</b></a><a>Deployments<b>7</b></a><a>StatefulSets<b>2</b></a><a>DaemonSets<b>1</b></a><a>Jobs<b>3</b></a><a>CronJobs<b>2</b></a><h6>NETWORK</h6><a>Services<b>9</b></a><h6>CONFIG</h6><a>ConfigMaps<b>14</b></a><a>Secrets<b>11</b></a><h6>CLUSTER</h6><a>Namespaces<b>18</b></a><a>Events<b>136</b></a></nav>
+<main>
+<div class="mods"><div class="mod"><h5>RUNNING</h5><b>21</b></div><div class="mod"><h5>PENDING</h5><b>2</b></div><div class="mod x"><h5>FAILING</h5><b>1</b></div><div class="mod"><h5>RESTARTS 1h</h5><b>17</b></div><div class="mod"><h5>NODES</h5><b>6</b></div><div class="mod"><h5>WARNINGS</h5><b>9</b></div></div>
+<table><tr><th>Name</th><th>Phase</th><th>Ready</th><th>Restarts</th><th>Node</th><th>IP</th><th>QoS</th><th>Age</th><th>Owner</th></tr>
+<tr class="x"><td class="n">payments-worker-5c8d7f9b4-qm2tz</td><td>CrashLoopBackOff</td><td>0/1</td><td>14</td><td>gke-pool-b-3f1a</td><td>10.48.5.22</td><td>Burstable</td><td>2h</td><td>payments-worker</td></tr>
+<tr><td class="n">checkout-api-7d9f8b6c5-x2kqp</td><td>Running</td><td>2/2</td><td>0</td><td>gke-pool-a-91c2</td><td>10.48.3.117</td><td>Burstable</td><td>4h</td><td>checkout-api</td></tr>
+<tr><td class="n">checkout-api-7d9f8b6c5-h8vnw</td><td>Running</td><td>2/2</td><td>0</td><td>gke-pool-a-7b0e</td><td>10.48.2.41</td><td>Burstable</td><td>4h</td><td>checkout-api</td></tr>
+<tr><td class="n">checkout-api-7d9f8b6c5-p4lrd</td><td>Running</td><td>2/2</td><td>1</td><td>gke-pool-b-3f1a</td><td>10.48.5.9</td><td>Burstable</td><td>4h</td><td>checkout-api</td></tr>
+<tr><td class="n">cart-svc-66b4d8c7f-9wq7s</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>10.48.3.88</td><td>Guaranteed</td><td>1d</td><td>cart-svc</td></tr>
+<tr><td class="n">cart-svc-66b4d8c7f-tz5mk</td><td>Pending</td><td>0/1</td><td>0</td><td>—</td><td>—</td><td>Guaranteed</td><td>38s</td><td>cart-svc</td></tr>
+<tr><td class="n">inventory-sync-28467120-bq9xd</td><td>Pending</td><td>0/1</td><td>0</td><td>—</td><td>—</td><td>BestEffort</td><td>12s</td><td>inventory-sync</td></tr>
+<tr><td class="n">redis-cart-0</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>10.48.7.3</td><td>Guaranteed</td><td>9d</td><td>redis-cart</td></tr>
+<tr><td class="n">redis-cart-1</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-5e8a</td><td>10.48.8.3</td><td>Guaranteed</td><td>9d</td><td>redis-cart</td></tr>
+<tr><td class="n">pricing-engine-84f6c9d77-lk3jn</td><td>Running</td><td>1/1</td><td>2</td><td>gke-pool-a-7b0e</td><td>10.48.2.77</td><td>Burstable</td><td>3d</td><td>pricing-engine</td></tr>
+<tr><td class="n">pricing-engine-84f6c9d77-r7c2v</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-b-3f1a</td><td>10.48.5.61</td><td>Burstable</td><td>3d</td><td>pricing-engine</td></tr>
+<tr><td class="n">fluent-bit-k2m8p</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-a-91c2</td><td>10.48.3.2</td><td>Burstable</td><td>21d</td><td>fluent-bit</td></tr>
+<tr><td class="n">promo-banner-5f7b9c6d8-xn4gq</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-12d4</td><td>10.48.7.19</td><td>BestEffort</td><td>6d</td><td>promo-banner</td></tr>
+<tr><td class="n">webhook-relay-6d9c5b7f4-zp8tw</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-b-3f1a</td><td>10.48.5.40</td><td>Burstable</td><td>12d</td><td>webhook-relay</td></tr>
+<tr><td class="n">search-indexer-7c4d9f8b6-mm2kd</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-a-7b0e</td><td>10.48.2.90</td><td>Burstable</td><td>15d</td><td>search-indexer</td></tr>
+<tr><td class="n">search-indexer-7c4d9f8b6-q9sxr</td><td>Running</td><td>1/1</td><td>0</td><td>gke-pool-c-5e8a</td><td>10.48.8.14</td><td>Burstable</td><td>15d</td><td>search-indexer</td></tr>
+</table></main></body></html>
