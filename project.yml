@@ -15,6 +15,9 @@ options:
 packages:
   KubeKit:
     path: KubeKit
+  CodeEditorView:
+    url: https://github.com/mchakravarty/CodeEditorView.git
+    revision: 2394a48f919d6570cfbfbd53d047a3eaeb95b59e
 
 settings:
   base:
@@ -42,6 +45,10 @@ targets:
       - path: App/Sources
       - path: App/Resources
     dependencies:
+      - package: CodeEditorView
+        product: CodeEditorView
+      - package: CodeEditorView
+        product: LanguageSupport
       - package: KubeKit
         product: KubeKit
       - package: KubeKit
@@ -61,6 +68,9 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: ""
         PRODUCT_NAME: Tsubame
         INFOPLIST_FILE: App/Resources/Info.plist
+        # Merge the generated iOS scene/launch keys below with the shared plist.
+        # Without this, iOS uses the legacy letterboxed launch size.
+        GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
@@ -89,6 +99,8 @@ targets:
       - path: App/Tests
     dependencies:
       - target: Tsubame
+      - package: KubeKit
+        product: KubeTestSupport
       - package: KubeKit
         product: KubeKit
       - package: KubeKit

@@ -20,6 +20,7 @@ final class AppEnvironment {
     let execRunner: (any ExecPluginRunning)?
     let execApprovals: any ExecApprovalGranting
     let platform: HostPlatform
+    private let clientFactory: (@Sendable (ClusterConnection) -> KubernetesClient)?
 
     init(
         credentialStore: any CredentialStore,
@@ -28,7 +29,8 @@ final class AppEnvironment {
         clientIdentities: (any ClientIdentityProviding)? = AppEnvironment.platformClientIdentities,
         execRunner: (any ExecPluginRunning)? = AppEnvironment.platformExecRunner,
         execApprovals: any ExecApprovalGranting = DecliningExecApproval(),
-        platform: HostPlatform = .current
+        platform: HostPlatform = .current,
+        clientFactory: (@Sendable (ClusterConnection) -> KubernetesClient)? = nil
     ) {
         self.credentialStore = credentialStore
         self.kubeconfigParser = kubeconfigParser
@@ -37,6 +39,7 @@ final class AppEnvironment {
         self.execRunner = execRunner
         self.execApprovals = execApprovals
         self.platform = platform
+        self.clientFactory = clientFactory
     }
 
     /// The only place the app branches on platform for kubeconfig discovery.
@@ -89,7 +92,8 @@ final class AppEnvironment {
     /// Builds the client for a connection, choosing the credential provider that
     /// matches the stored authentication method.
     func makeClient(for connection: ClusterConnection) -> KubernetesClient {
-        KubernetesClient(
+        if let clientFactory { return clientFactory(connection) }
+        return KubernetesClient(
             transport: URLSessionTransport(
                 serverURL: connection.serverURL,
                 credentialProvider: makeCredentialProvider(for: connection),
