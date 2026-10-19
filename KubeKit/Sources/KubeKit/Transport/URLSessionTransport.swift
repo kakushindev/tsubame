@@ -263,6 +263,21 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
 }
 
 extension URLSessionTransport: URLSessionTaskDelegate {
+    /// Task-level challenges, which is where `bytes(for:)` delivers them.
+    ///
+    /// Without this, watches and log streams fell back to default handling and
+    /// rejected every cluster using a private certificate authority — while plain
+    /// requests, which arrive at the session-level method below, succeeded. One
+    /// transport answering two different ways depending on the call was the whole
+    /// bug; both now resolve to the same evaluator.
+    public func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge
+    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        await urlSession(session, didReceive: challenge)
+    }
+
     public func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge

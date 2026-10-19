@@ -40,11 +40,20 @@ final class ClusterSession: Identifiable {
         self.namespace = connection.defaultNamespace
     }
 
+    /// How long discovery may run before the context is reported as unreachable.
+    ///
+    /// A cluster behind a VPN that is not connected accepts the TCP connection and
+    /// then says nothing, so without a bound the navigator spins indefinitely and
+    /// never explains itself.
+    static let discoveryTimeout: TimeInterval = 15
+
     func discover() async {
         do {
             let discovery = self.discovery
             let result = try await withTaskCancellationHandler {
-                try await discovery.catalog()
+                try await Self.withTimeout(seconds: Self.discoveryTimeout) {
+                    try await discovery.catalog()
+                }
             } onCancel: {
                 Task { await discovery.invalidate() }
             }
@@ -52,7 +61,34 @@ final class ClusterSession: Identifiable {
             catalog = result
             failure = nil
         } catch is CancellationError { }
-        catch { failure = error.localizedDescription }
+        catch {
+            // Stop the sweep that is still running against a cluster nobody is
+            // waiting for any more.
+            let discovery = self.discovery
+            Task { await discovery.invalidate() }
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Runs `work`, failing if it has not finished within `seconds`.
+    private static func withTimeout<T: Sendable>(
+        seconds: TimeInterval,
+        _ work: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw KubernetesError.networkUnreachable(
+                    underlying: "it did not respond within \(Int(seconds)) seconds."
+                )
+            }
+            guard let result = try await group.next() else {
+                throw CancellationError()
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
     /// Discards the failed catalog and discovers again.
