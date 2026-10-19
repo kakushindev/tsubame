@@ -484,16 +484,16 @@ struct WorkspaceView: View {
         if let kind, let tab = tabs.selected {
             if scenePhase == .active {
                 ResourceListView(
-                    model: ResourceListModel(client: session.client, resource: kind, namespace: kind.isNamespaced ? session.namespace : nil, search: tab.search),
-                    cluster: session.connection.contextName, resource: kind, namespace: session.namespace, selection: $rowID,
+                    model: ResourceListModel(client: session.client, resource: kind, namespaces: kind.isNamespaced ? session.namespaces : [], search: tab.search),
+                    cluster: session.connection.contextName, resource: kind, namespaces: session.namespaces, selection: $rowID,
                     didSelect: { row in
                         objectTarget = row.map { WriteTarget(resource: kind, namespace: $0.namespace, name: $0.name) }
                         inspecting = row != nil
-                    }, changeNamespace: applyNamespace,
+                    }, changeNamespaces: applyNamespaces,
                     loadNamespaces: { await session.namespaces() },
                     searchChanged: { tabs.setSearch($0) }
                 )
-                .id("\(tab.id)/\(session.namespace)")
+                .id("\(tab.id)/\(session.namespaces.joined(separator: ","))")
             } else {
                 ContentUnavailableView("Updates paused", systemImage: "pause.circle",
                                        description: Text("Resources reload when the app becomes active."))
@@ -568,7 +568,7 @@ struct WorkspaceView: View {
         guard let tab = tabs.selected, let cached = sessions[tab.connectionID] else { return }
         session = cached
         kind = tab.resource
-        cached.namespace = tab.namespace
+        cached.namespaces = tab.namespaces
         showingConnections = false
         clearSelection()
         revealContent()
@@ -587,13 +587,16 @@ struct WorkspaceView: View {
         if sizeClass == .compact { columnVisibility = .detailOnly }
         else if sizeClass == .regular { columnVisibility = .automatic }
     }
-    private func applyNamespace(_ raw: String) -> String? {
-        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.range(of: #"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"#, options: .regularExpression) != nil else {
-            return "Use up to 63 lowercase letters, numbers, and hyphens."
+    private func applyNamespaces(_ raw: [String]) -> String? {
+        let values = raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !values.isEmpty else { return "Choose at least one namespace." }
+        if let invalid = values.first(where: {
+            $0.range(of: #"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"#, options: .regularExpression) == nil
+        }) {
+            return "“\(invalid)” is not a namespace name. Use up to 63 lowercase letters, numbers, and hyphens."
         }
-        tabs.setNamespace(value)
-        session?.namespace = value
+        tabs.setNamespaces(values)
+        session?.namespaces = values
         clearSelection()
         return nil
     }

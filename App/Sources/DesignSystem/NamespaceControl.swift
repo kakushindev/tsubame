@@ -17,15 +17,22 @@ struct NamespaceControl: View {
         case failed(String)
     }
 
-    let namespace: String
-    let change: (String) -> String?
+    let selected: [String]
+    let change: ([String]) -> String?
     var load: (@Sendable () async -> Options)?
 
     @State private var showing = false
     @State private var draft = ""
     @State private var failure: String?
     @State private var options: Options = .loading
+    @State private var working: [String] = []
     @FocusState private var searchFocused: Bool
+
+    /// "default", or "default +2" once several are in view.
+    static func scopeLabel(_ namespaces: [String]) -> String {
+        guard let first = namespaces.first else { return "No namespace" }
+        return namespaces.count > 1 ? "\(first) +\(namespaces.count - 1)" : first
+    }
 
     private var matches: [String] {
         guard case .loaded(let all) = options else { return [] }
@@ -38,7 +45,7 @@ struct NamespaceControl: View {
     /// exists but cannot be listed is still reachable.
     private var typedIsNew: Bool {
         let value = draft.trimmingCharacters(in: .whitespaces)
-        guard !value.isEmpty, value != namespace else { return false }
+        guard !value.isEmpty, !working.contains(value) else { return false }
         if case .loaded(let all) = options { return !all.contains(value) }
         return true
     }
@@ -47,16 +54,21 @@ struct NamespaceControl: View {
         Button {
             draft = ""
             failure = nil
+            working = selected
             showing = true
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder")
-                Text(namespace).lineLimit(1)
+                Text(Self.scopeLabel(selected)).lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption)
             }
         }
-        .help("Change namespace")
-        .accessibilityLabel("Namespace: \(namespace)")
+        .help(selected.count > 1 ? selected.joined(separator: ", ") : "Change namespace")
+        .accessibilityLabel(
+            selected.count > 1
+                ? "Namespaces: \(selected.joined(separator: ", "))"
+                : "Namespace: \(selected.first ?? "none")"
+        )
         .popover(isPresented: $showing) {
             content
                 .frame(width: 280)
@@ -74,7 +86,10 @@ struct NamespaceControl: View {
             TextField("Search or enter a namespace", text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
-                .onSubmit { apply(draft) }
+                .onSubmit {
+                    let value = draft.trimmingCharacters(in: .whitespaces)
+                    if !value.isEmpty { toggle(value); draft = "" } else { commit() }
+                }
                 .padding(10)
 
             switch options {
@@ -92,10 +107,10 @@ struct NamespaceControl: View {
 
             if typedIsNew {
                 Divider()
-                Button { apply(draft) } label: {
+                Button { toggle(draft.trimmingCharacters(in: .whitespaces)); draft = "" } label: {
                     row {
-                        Image(systemName: "arrow.turn.down.left").foregroundStyle(.secondary)
-                        Text("Use “\(draft.trimmingCharacters(in: .whitespaces))”").lineLimit(1)
+                        Image(systemName: "plus").foregroundStyle(.secondary)
+                        Text("Add “\(draft.trimmingCharacters(in: .whitespaces))”").lineLimit(1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -115,18 +130,19 @@ struct NamespaceControl: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(matches, id: \.self) { name in
-                        Button { apply(name) } label: {
+                        let isOn = working.contains(name)
+                        Button { toggle(name) } label: {
                             row {
-                                Image(systemName: name == namespace ? "checkmark" : "folder")
-                                    .foregroundStyle(name == namespace ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                                    .foregroundStyle(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                                     .frame(width: 14)
                                 Text(name).lineLimit(1)
                                 Spacer(minLength: 0)
                             }
                         }
                         .buttonStyle(.plain)
-                        .background(name == namespace ? Color.accentColor.opacity(0.14) : .clear)
-                        .accessibilityAddTraits(name == namespace ? [.isButton, .isSelected] : .isButton)
+                        .background(isOn ? Color.accentColor.opacity(0.14) : .clear)
+                        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
                     }
                 }
             }
@@ -152,10 +168,21 @@ struct NamespaceControl: View {
             .contentShape(.rect)
     }
 
-    private func apply(_ value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        failure = change(trimmed)
-        if failure == nil { showing = false }
+    private func toggle(_ name: String) {
+        guard !name.isEmpty else { return }
+        if let index = working.firstIndex(of: name) {
+            // Never leave the table with no scope at all.
+            guard working.count > 1 else { return }
+            working.remove(at: index)
+        } else {
+            working.append(name)
+        }
+        commit()
+    }
+
+    /// Applies as the user picks, so the table follows the selection rather than
+    /// waiting for a confirm step the rest of the toolbar does not have.
+    private func commit() {
+        failure = change(working)
     }
 }

@@ -12,7 +12,7 @@ final class ClusterSession: Identifiable {
     let client: KubernetesClient
     let writer: ResourceWriter
     let discovery: any APIDiscovering
-    var namespace: String
+    var namespaces: [String]
     private(set) var catalog: APIResourceCatalog?
     private(set) var failure: String?
 
@@ -37,7 +37,7 @@ final class ClusterSession: Identifiable {
         self.client = client
         self.writer = ResourceWriter(client: client)
         self.discovery = ServerAPIDiscovery(client: client)
-        self.namespace = connection.defaultNamespace
+        self.namespaces = [connection.defaultNamespace]
     }
 
     /// How long discovery may run before the context is reported as unreachable.

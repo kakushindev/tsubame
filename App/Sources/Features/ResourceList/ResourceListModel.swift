@@ -18,10 +18,24 @@ final class ResourceListModel {
     var search = ""
     private let watcher: any ResourceWatching
 
-    init(client: KubernetesClient, resource: DiscoveredResource, namespace: String?, search: String = "") {
+    /// `namespaces` is empty for a cluster-scoped kind. More than one means one
+    /// watch per namespace, merged: the API has no call that lists a chosen few.
+    init(
+        client: KubernetesClient,
+        resource: DiscoveredResource,
+        namespaces: [String],
+        search: String = ""
+    ) {
         self.search = search
-        watcher = ResourceKindRegistry.mvp.binding(for: resource.groupVersionKind)
-            .makeWatcher(client, resource, namespace, ListOptions(limit: 500))
+        let binding = ResourceKindRegistry.mvp.binding(for: resource.groupVersionKind)
+        let options = ListOptions(limit: 500)
+        if namespaces.count <= 1 {
+            watcher = binding.makeWatcher(client, resource, namespaces.first, options)
+        } else {
+            watcher = CompositeResourceWatcher(
+                children: namespaces.map { binding.makeWatcher(client, resource, $0, options) }
+            )
+        }
     }
 
     var filteredRows: [Row] {

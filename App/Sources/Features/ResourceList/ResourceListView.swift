@@ -6,10 +6,10 @@ struct ResourceListView: View {
     @State var model: ResourceListModel
     let cluster: String
     let resource: DiscoveredResource
-    let namespace: String
+    let namespaces: [String]
     @Binding var selection: String?
     let didSelect: (ResourceListModel.Row?) -> Void
-    var changeNamespace: (String) -> String? = { _ in nil }
+    var changeNamespaces: ([String]) -> String? = { _ in nil }
     var loadNamespaces: (@Sendable () async -> NamespaceControl.Options)?
     var searchChanged: (String) -> Void = { _ in }
     @State private var sortOrder = [KeyPathComparator(\ResourceListModel.Row.name)]
@@ -51,7 +51,7 @@ struct ResourceListView: View {
                 .overlay { emptyState }
             Divider()
             HStack(spacing: 16) {
-                Text("\(cluster) · \(resource.isNamespaced ? namespace : "Cluster scope")")
+                Text("\(cluster) · \(resource.isNamespaced ? NamespaceControl.scopeLabel(namespaces) : "Cluster scope")")
                 Spacer()
                 if let snapshot = model.snapshot { FreshnessIndicator(freshness: snapshot.freshness) }
                 else { Text("Connecting…") }
@@ -68,7 +68,7 @@ struct ResourceListView: View {
 
     @ViewBuilder private var scopeControl: some View {
         if resource.isNamespaced {
-            NamespaceControl(namespace: namespace, change: changeNamespace, load: loadNamespaces)
+            NamespaceControl(selected: namespaces, change: changeNamespaces, load: loadNamespaces)
         } else { Label("Cluster scope", systemImage: "globe").font(.callout).foregroundStyle(.secondary) }
     }
 
@@ -171,7 +171,7 @@ struct ResourceListView: View {
                 Label(model.search.isEmpty ? "No \(ResourceKindPresentation.name(resource).lowercased())" : "No matching resources",
                       systemImage: model.search.isEmpty ? ResourceKindPresentation.symbol(resource) : "magnifyingglass")
             } description: {
-                Text(model.search.isEmpty ? "\(cluster) · \(namespace)" : "Try a different name or clear your search.")
+                Text(model.search.isEmpty ? "\(cluster) · \(NamespaceControl.scopeLabel(namespaces))" : "Try a different name or clear your search.")
             }
             .allowsHitTesting(false)
         }
@@ -182,21 +182,6 @@ struct ResourceListView: View {
     }
 
     private func status(_ summary: ResourceRowSummary) -> some View {
-        Label(summary.headline, systemImage: statusSymbol(summary.tone))
-            .labelStyle(.titleAndIcon)
-            .font(.callout).foregroundStyle(.primary)
-            .fixedSize(horizontal: true, vertical: false)
-            .help(summary.headline)
-            .accessibilityLabel(summary.headline)
-    }
-
-    private func statusSymbol(_ tone: ResourceRowSummary.Tone) -> String {
-        switch tone {
-        case .normal: "checkmark.circle"
-        case .pending: "clock"
-        case .attention: "exclamationmark.circle"
-        case .failure: "xmark.circle"
-        case .terminating: "minus.circle"
-        }
+        ResourceStatusBadge(summary: summary)
     }
 }

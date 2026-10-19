@@ -7,7 +7,7 @@ struct ResourceWorkspaceTab: Hashable, Identifiable {
     let connectionID: UUID
     let contextName: String
     let resource: DiscoveredResource
-    var namespace: String
+    var namespaces: [String]
     var search = ""
 }
 
@@ -23,7 +23,7 @@ final class WorkspaceTabs {
         let id = "\(connection.id)/\(resource.groupVersion.apiVersion)/\(resource.resourceName)"
         if let existing = items.first(where: { $0.id == id }) { selection = id; return existing }
         let tab = ResourceWorkspaceTab(id: id, connectionID: connection.id, contextName: connection.contextName,
-                                       resource: resource, namespace: connection.defaultNamespace)
+                                       resource: resource, namespaces: [connection.defaultNamespace])
         items.append(tab)
         selection = id
         return tab
@@ -43,9 +43,9 @@ final class WorkspaceTabs {
         if selection == id { selection = items.isEmpty ? nil : items[min(index, items.count - 1)].id }
     }
 
-    func setNamespace(_ value: String) {
-        guard let index = items.firstIndex(where: { $0.id == selection }) else { return }
-        items[index].namespace = value
+    func setNamespaces(_ values: [String]) {
+        guard let index = items.firstIndex(where: { $0.id == selection }), !values.isEmpty else { return }
+        items[index].namespaces = values
     }
 
     func setSearch(_ value: String) {

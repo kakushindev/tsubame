@@ -24,16 +24,16 @@ struct WorkspaceTabsTests {
         let tabs = WorkspaceTabs()
         let local = connection("local"), production = connection("production")
         let localPods = tabs.open(pods, connection: local)
-        tabs.setNamespace("tools"); tabs.setSearch("api")
+        tabs.setNamespaces(["tools"]); tabs.setSearch("api")
         tabs.open(services, connection: local)
-        #expect(tabs.selected?.namespace == "development")
+        #expect(tabs.selected?.namespaces == ["development"])
         tabs.setSearch("gateway")
         let remotePods = tabs.open(pods, connection: production)
         #expect(remotePods.id != localPods.id)
         #expect(tabs.selected?.search == "")
         tabs.open(pods, connection: local)
         #expect(tabs.items.count == 3)
-        #expect(tabs.selected?.namespace == "tools")
+        #expect(tabs.selected?.namespaces == ["tools"])
         #expect(tabs.selected?.search == "api")
     }
 
@@ -52,5 +52,18 @@ struct WorkspaceTabsTests {
         tabs.close(second.id)
         #expect(tabs.selection == nil)
         #expect(tabs.selected == nil)
+    }
+
+    @Test("A tab keeps several namespaces, and never ends up with none")
+    func holdsSeveralNamespaces() throws {
+        let tabs = WorkspaceTabs()
+        tabs.open(pods, connection: connection("local"))
+
+        tabs.setNamespaces(["tools", "payments", "default"])
+        #expect(tabs.selected?.namespaces == ["tools", "payments", "default"])
+
+        // An empty scope would leave the table listing nothing with no way back.
+        tabs.setNamespaces([])
+        #expect(tabs.selected?.namespaces == ["tools", "payments", "default"])
     }
 }
