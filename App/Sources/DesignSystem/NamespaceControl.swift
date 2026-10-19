@@ -73,10 +73,7 @@ struct NamespaceControl: View {
         // window, so opening upward covered the tab strip the user was just in.
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             content
-                // Namespace names run long — "cert-manager-system",
-                // "asqara-telegram-bot" — and truncating them defeats a list whose
-                // whole job is telling them apart.
-                .frame(width: 380)
+                .frame(width: 280)
                 .task(id: showing) {
                     guard showing, let load else { return }
                     options = .loading
@@ -152,7 +149,9 @@ struct NamespaceControl: View {
                 }
             }
             // Tall enough to browse, short enough that the popover stays a control.
-            .frame(maxHeight: 320)
+            // Tall enough to scan a cluster's namespaces without scrolling for
+            // most of them; a cluster with dozens still scrolls.
+            .frame(maxHeight: 460)
         }
     }
 
