@@ -269,6 +269,7 @@ struct WorkspaceView: View {
             contextMenuItems(connected: cached, contextID: nil, connection: cached.connection)
         }
         if expanded.wrappedValue {
+            VStack(alignment: .leading, spacing: 0) {
             ForEach(ResourceKindPresentation.Category.allCases) { category in
                 let resources = cached.resources.filter { ResourceKindPresentation.category($0) == category }
                 if !resources.isEmpty {
@@ -301,7 +302,25 @@ struct WorkspaceView: View {
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            }
+            .overlay(alignment: .leading) { contextRail(cached) }
         }
+    }
+
+    /// A rail down an expanded context's rows, so it is clear which cluster they
+    /// belong to when several are open at once.
+    ///
+    /// Tinted for the context being looked at and muted for the others. A colour
+    /// per cluster would read faster still, but PRODUCT.md keeps one tint for
+    /// what is active and does not spend colour on decoration.
+    @ViewBuilder private func contextRail(_ cached: ClusterSession) -> some View {
+        let isActive = session?.connection.id == cached.connection.id && !showingConnections
+        RoundedRectangle(cornerRadius: 1, style: .continuous)
+            .fill(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+            .frame(width: 2)
+            .padding(.leading, 15)
+            .padding(.vertical, 1)
+            .accessibilityHidden(true)
     }
 
     /// What right-clicking a context offers, on either kind of row.
