@@ -69,9 +69,14 @@ struct NamespaceControl: View {
                 ? "Namespaces: \(selected.joined(separator: ", "))"
                 : "Namespace: \(selected.first ?? "none")"
         )
-        .popover(isPresented: $showing) {
+        // Below the control, not above it: the toolbar sits near the top of the
+        // window, so opening upward covered the tab strip the user was just in.
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
             content
-                .frame(width: 280)
+                // Namespace names run long — "cert-manager-system",
+                // "asqara-telegram-bot" — and truncating them defeats a list whose
+                // whole job is telling them apart.
+                .frame(width: 380)
                 .task(id: showing) {
                     guard showing, let load else { return }
                     options = .loading
@@ -147,7 +152,7 @@ struct NamespaceControl: View {
                 }
             }
             // Tall enough to browse, short enough that the popover stays a control.
-            .frame(maxHeight: 260)
+            .frame(maxHeight: 320)
         }
     }
 
