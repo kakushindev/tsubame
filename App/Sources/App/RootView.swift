@@ -251,9 +251,12 @@ struct WorkspaceView: View {
     @ViewBuilder private func compactContextTree(_ cached: ClusterSession) -> some View {
         let expanded = expansion(cached.connection.id, in: $expandedContexts)
         navigatorDisclosure(cached.connection.contextName, expanded: expanded, depth: 0) {
-            Label { Text(cached.connection.contextName).fontWeight(.medium) } icon: {
-                Image(systemName: "server.rack").foregroundStyle(.tint)
-            }
+            contextRowLabel(cached)
+        }
+        .overlay(alignment: .trailing) {
+            // A sibling of the row rather than part of it, so retrying never also
+            // collapses the group the user is looking at.
+            if cached.state == .failed { retryButton(cached).padding(.trailing, 6) }
         }
         if expanded.wrappedValue {
             ForEach(ResourceKindPresentation.Category.allCases) { category in
@@ -280,14 +283,53 @@ struct WorkspaceView: View {
                     }
                 }
             }
-            if let failure = cached.failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
+            // Partial discovery stays visible: some kinds resolved and some did
+            // not, which is a different thing from the context failing, and PRD
+            // §9.2 requires it to be explicit rather than a shorter list.
             if let failures = cached.catalog?.failures, !failures.isEmpty {
                 ForEach(failures.keys.sorted { $0.apiVersion < $1.apiVersion }, id: \.self) { group in
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if cached.catalog == nil && cached.failure == nil { ProgressView("Discovering…") }
+            if cached.state == .connecting { ProgressView("Discovering…") }
         }
+    }
+
+    /// A context's name, its state, and nothing else.
+    @ViewBuilder private func contextRowLabel(_ cached: ClusterSession) -> some View {
+        Label {
+            HStack(spacing: 4) {
+                Text(cached.connection.contextName).fontWeight(.medium)
+                if cached.state == .failed {
+                    // The shape carries the meaning, not the colour, and the
+                    // message the sidebar no longer prints lives in the tooltip
+                    // and the accessibility label.
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("Not connected: \(cached.failure ?? "unknown error")")
+                }
+            }
+        } icon: {
+            Image(systemName: "server.rack")
+                .foregroundStyle(cached.state == .ready ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        }
+        .help(cached.failure ?? cached.connection.contextName)
+    }
+
+    private func retryButton(_ cached: ClusterSession) -> some View {
+        Button {
+            Task { await cached.retry() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.caption.weight(.semibold))
+                .frame(width: usesTouchNavigation ? 44 : 22, height: usesTouchNavigation ? 44 : 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Try connecting to \(cached.connection.contextName) again")
+        .accessibilityLabel("Retry \(cached.connection.contextName)")
     }
 
     private func navigatorDisclosure<Content: View>(
@@ -330,15 +372,20 @@ struct WorkspaceView: View {
                     }
                 }
             }
-            if let failure = cached.failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
             if let failures = cached.catalog?.failures, !failures.isEmpty {
                 ForEach(failures.keys.sorted { $0.apiVersion < $1.apiVersion }, id: \.self) { group in
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if cached.catalog == nil && cached.failure == nil { ProgressView("Discovering…") }
+            if cached.state == .connecting { ProgressView("Discovering…") }
         } label: {
-            Label(cached.connection.contextName, systemImage: "server.rack").fontWeight(.medium)
+            HStack(spacing: 0) {
+                contextRowLabel(cached)
+                if cached.state == .failed {
+                    Spacer(minLength: 8)
+                    retryButton(cached)
+                }
+            }
         }
     }
 
@@ -428,7 +475,16 @@ struct WorkspaceView: View {
                                        description: Text("Resources reload when the app becomes active."))
             }
         } else if let failure = session.failure {
-            ContentUnavailableView("Could not read the API", systemImage: "exclamationmark.triangle", description: Text(failure))
+            // The detail pane is where the message belongs: there is room to read
+            // it, and it is the one place the user is looking when a context will
+            // not open.
+            ContentUnavailableView {
+                Label("Could not read the API", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(failure)
+            } actions: {
+                Button("Try Again") { Task { await session.retry() } }
+            }
         } else if session.catalog != nil {
             ContentUnavailableView("Choose a resource kind", systemImage: "square.stack",
                                    description: Text("Open a resource from the navigator to create a tab."))

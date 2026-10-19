@@ -16,6 +16,22 @@ final class ClusterSession: Identifiable {
     private(set) var catalog: APIResourceCatalog?
     private(set) var failure: String?
 
+    /// How this context is doing, as the navigator needs to show it.
+    ///
+    /// The navigator distinguishes these three rather than printing the failure
+    /// text: a wrapped error message in a sidebar costs more room than the whole
+    /// tree and still does not say what to do about it.
+    enum State: Hashable {
+        case connecting
+        case ready
+        case failed
+    }
+
+    var state: State {
+        if failure != nil { return .failed }
+        return catalog == nil ? .connecting : .ready
+    }
+
     init(connection: ClusterConnection, client: KubernetesClient) {
         self.connection = connection
         self.client = client
@@ -37,6 +53,14 @@ final class ClusterSession: Identifiable {
             failure = nil
         } catch is CancellationError { }
         catch { failure = error.localizedDescription }
+    }
+
+    /// Discards the failed catalog and discovers again.
+    func retry() async {
+        failure = nil
+        catalog = nil
+        await discovery.invalidate()
+        await discover()
     }
 
     var resources: [DiscoveredResource] {
