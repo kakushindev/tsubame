@@ -7,22 +7,50 @@ public struct ResourceList<Element: ResourceObject & Codable>: Sendable, Codable
     public let resourceVersion: String?
     public let continueToken: String?
     public let remainingItemCount: Int?
+    /// Items on this page that could not be decoded.
+    ///
+    /// One malformed or unexpected object must not cost the user the whole page —
+    /// it would read as "this namespace is empty", which PRD §9.2 forbids. The
+    /// count travels so the UI can say the page is partial instead.
+    public let undecodableItemCount: Int
 
     public init(
         items: [Element],
         resourceVersion: String?,
         continueToken: String?,
-        remainingItemCount: Int? = nil
+        remainingItemCount: Int? = nil,
+        undecodableItemCount: Int = 0
     ) {
         self.items = items
         self.resourceVersion = resourceVersion
         self.continueToken = continueToken
         self.remainingItemCount = remainingItemCount
+        self.undecodableItemCount = undecodableItemCount
     }
+
+    public var isPartial: Bool { undecodableItemCount > 0 }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decoded = try container.decodeIfPresent([Element].self, forKey: .items) ?? []
+        // Decoded one at a time rather than as `[Element]`, so a single bad item
+        // costs that item and not the page around it.
+        var decoded: [Element] = []
+        var undecodable = 0
+        if container.contains(.items), try !container.decodeNil(forKey: .items) {
+            var items = try container.nestedUnkeyedContainer(forKey: .items)
+            if let count = items.count { decoded.reserveCapacity(count) }
+            while !items.isAtEnd {
+                do {
+                    decoded.append(try items.decode(Element.self))
+                } catch {
+                    // The element container has to be advanced past the item that
+                    // failed, or the loop never terminates.
+                    _ = try? items.decode(SkippedItem.self)
+                    undecodable += 1
+                }
+            }
+        }
+        self.undecodableItemCount = undecodable
         // The server states the item type once, on the list, and omits it from the
         // items themselves. Hand it down so every item knows what it is.
         if let itemType = Self.itemType(
@@ -66,6 +94,14 @@ public struct ResourceList<Element: ResourceObject & Codable>: Sendable, Codable
 
     private enum CodingKeys: String, CodingKey {
         case items, metadata, apiVersion, kind
+    }
+
+    /// Consumes one element of any shape, to step over an item that failed to
+    /// decode without abandoning the rest of the page.
+    private struct SkippedItem: Decodable {
+        init(from decoder: any Decoder) throws {
+            _ = try? decoder.singleValueContainer()
+        }
     }
 
     private struct ListMeta: Codable {

@@ -201,6 +201,7 @@ struct ResourceWatcherTests {
             case .reconnecting: label = "reconnecting"
             case .stale: label = "stale"
             case .disconnected: label = "disconnected"
+            case .polling: label = "polling"
             }
             if states.last != label { states.append(label) }
         }

@@ -14,7 +14,7 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] `KubeKit` local package with four targets and enforced dependency direction
 - [x] Swift 6 language mode and complete strict concurrency in both the package and the app
 - [x] Unit test targets for the package and the app, running under Swift Testing
-- [ ] Continuous integration: `xcodegen generate`, build for both platforms, run both test suites
+- [x] Continuous integration: `xcodegen generate`, build for both platforms, run both test suites
 - [ ] SwiftLint or swift-format configuration, if the project wants one
 - [ ] `LICENSE` — open decision (PRD §15)
 
@@ -27,10 +27,13 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] `ResourceList` paging envelope and `WatchEvent`
 - [x] Kubeconfig document model, including `exec` and `auth-provider` entries
 - [x] `ClusterConnection`, `AuthenticationMethod`, `CredentialReference`, `TLSConfiguration`
-- [x] `DataFreshness` — live, reconnecting, stale, disconnected
-- [ ] Typed models for the MVP kinds: Pod, Deployment, Service, Namespace, Event,
-      ConfigMap, Secret, StatefulSet, DaemonSet, Job, CronJob
-- [ ] Per-kind status summaries for list rows (PRD §9.2)
+- [x] `DataFreshness` — live, reconnecting, stale, disconnected, polling
+- [x] Typed models for the MVP kinds: Pod, Deployment, Service, Namespace, Event,
+      ConfigMap, Secret, StatefulSet, DaemonSet, Job, CronJob (`TypedResource`;
+      each decodes `raw` first and encodes it back, so a round trip never narrows
+      a manifest)
+- [x] Per-kind status summaries for list rows (PRD §9.2) — `ResourceRowSummary`,
+      owned by each kind; `tone` is never a colour alone
 - [x] API discovery payloads (`APIVersions`, `APIGroupList`, `APIResourceList`) and
       the resolved `APIResourceCatalog`
 - [ ] `CustomResourceDefinition` model and the OpenAPI schema subset CRD views need
@@ -45,13 +48,19 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] `KubernetesError` and `KubernetesErrorMapper`, including 410 and `Retry-After`
 - [x] `CredentialRedactor` for errors, logs, and diagnostics
 - [x] `RetryPolicy` with bounded exponential backoff and jitter
-- [ ] Proxy support for a kubeconfig `proxy-url`
-- [ ] Request timeouts and cancellation audited against context switching (PRD §12)
+- [x] Proxy support for a kubeconfig `proxy-url` (unsupported proxies refuse the
+      connection rather than silently connecting directly)
+- [x] Request timeouts and cancellation audited against context switching (PRD §12):
+      a separate streaming session so a quiet watch is not killed by the 60s
+      inter-packet default, a bounded `\n`-only `LineChunker` replacing
+      `AsyncLineSequence`, and cancellation always surfacing as `CancellationError`
 
 ### Authentication
 
 - [x] `CredentialProvider` protocol and `UnsupportedCredentialProvider`
 - [x] `BearerTokenCredentialProvider` with invalidation on rejection
+- [x] `TokenFileCredentialProvider` re-reading a rotating service-account token
+      (macOS; iOS copies the value once and warns that it will expire)
 - [x] `CredentialStore` protocol and `EphemeralCredentialStore`
 - [x] `KeychainCredentialStore` (device-only, available after first unlock)
 - [ ] Client-certificate provider: PEM/PKCS#12 import to a `SecIdentity` (macOS)
@@ -63,8 +72,9 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 - [x] `KubeconfigParsing` protocol and the Yams-backed parser
 - [x] Context summaries for the picker, defaulting the namespace to `default`
-- [ ] Importing a context into a `ClusterConnection` plus a stored credential
-- [ ] Resolving file references (`certificate-authority`, `client-key`, `tokenFile`)
+- [x] Importing a context into a `ClusterConnection` plus a stored credential
+      (`KubeconfigImporter`: `plan` reads and stores nothing, `import` writes once)
+- [x] Resolving file references (`certificate-authority`, `client-key`, `tokenFile`)
 - [ ] `KUBECONFIG` multi-path merge — open decision (PRD §15)
 
 ### Resource operations
@@ -74,7 +84,15 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] API discovery: served groups, versions, resources, and namespacing
 - [x] `ResourceWatcher`: list then watch, relist on 410, bounded reconnect, bounded
       event buffer, and a `DataFreshness` output
-- [ ] Rate-limited polling fallback for resources that cannot be watched
+- [x] Erasure layer so one browse path serves typed and generic kinds:
+      `AnyResourceObject`, `ResourceWatching`, `ErasedResourceSnapshot`,
+      `ErasedResourceWatcher`, and `ResourceKindRegistry` as the only place that
+      decides typed versus generic versus polling
+- [x] Tolerant list decoding: one undecodable item costs that item, and the page
+      reports `undecodableItemCount` rather than silently showing fewer rows
+- [x] Rate-limited polling fallback for resources that cannot be watched
+      (`PollingResourceWatcher` + per-connection `PollingBudget`, published as
+      `DataFreshness.polling` so it is never shown as a live watch)
 - [ ] Pod log streaming: container selection, `previous`, `sinceTime`, `tailLines`,
       bounded in-memory buffer
 - [ ] Write operations in their own type, separate from the read client:
@@ -151,7 +169,8 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 ## 5. Cross-cutting verification
 
-- [ ] Watch reliability: drop, resume, 410, duplicate events, rapid navigation
+- [x] Watch reliability: drop, resume, 410 (both the in-stream event and the HTTP
+      failure), duplicate and out-of-order events, rapid navigation, paging
 - [ ] No task or memory growth across context switches and backgrounding
 - [ ] No credential value in any log, error, or diagnostic (extend the redactor tests)
 - [ ] Secret values and logs absent from every persistent cache
