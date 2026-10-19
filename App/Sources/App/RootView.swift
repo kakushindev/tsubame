@@ -489,7 +489,9 @@ struct WorkspaceView: View {
                     didSelect: { row in
                         objectTarget = row.map { WriteTarget(resource: kind, namespace: $0.namespace, name: $0.name) }
                         inspecting = row != nil
-                    }, changeNamespace: applyNamespace, searchChanged: { tabs.setSearch($0) }
+                    }, changeNamespace: applyNamespace,
+                    loadNamespaces: { await session.namespaces() },
+                    searchChanged: { tabs.setSearch($0) }
                 )
                 .id("\(tab.id)/\(session.namespace)")
             } else {

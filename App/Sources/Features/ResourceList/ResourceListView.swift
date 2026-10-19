@@ -10,6 +10,7 @@ struct ResourceListView: View {
     @Binding var selection: String?
     let didSelect: (ResourceListModel.Row?) -> Void
     var changeNamespace: (String) -> String? = { _ in nil }
+    var loadNamespaces: (@Sendable () async -> NamespaceControl.Options)?
     var searchChanged: (String) -> Void = { _ in }
     @State private var sortOrder = [KeyPathComparator(\ResourceListModel.Row.name)]
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -67,7 +68,7 @@ struct ResourceListView: View {
 
     @ViewBuilder private var scopeControl: some View {
         if resource.isNamespaced {
-            NamespaceControl(namespace: namespace, change: changeNamespace)
+            NamespaceControl(namespace: namespace, change: changeNamespace, load: loadNamespaces)
         } else { Label("Cluster scope", systemImage: "globe").font(.callout).foregroundStyle(.secondary) }
     }
 

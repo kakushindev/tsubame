@@ -99,6 +99,30 @@ final class ClusterSession: Identifiable {
         await discover()
     }
 
+    /// The cluster's namespaces, for the scope control.
+    ///
+    /// A denial is its own answer rather than an error: an account may be allowed
+    /// to work inside a namespace and not to enumerate them, and the control says
+    /// so instead of showing an empty menu (PRD §12).
+    func namespaces() async -> NamespaceControl.Options {
+        guard let resource = catalog?.resource(forKind: "Namespace", inGroup: "") else {
+            return .denied
+        }
+        do {
+            let list = try await client.list(
+                resource.groupVersionResource,
+                namespace: nil,
+                options: ListOptions(limit: 500),
+                as: GenericResource.self
+            )
+            return .loaded(list.items.map(\.name).sorted())
+        } catch KubernetesError.permissionDenied {
+            return .denied
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
     var resources: [DiscoveredResource] {
         guard let catalog else { return [] }
         // Prefer the server's preferred version; avoid duplicate kinds in navigation.
