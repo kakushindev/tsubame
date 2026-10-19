@@ -298,7 +298,6 @@ struct WorkspaceView: View {
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if cached.state == .connecting { ProgressView("Discovering…") }
         }
     }
 
@@ -311,7 +310,8 @@ struct WorkspaceView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .layoutPriority(1)
-                if cached.state == .failed {
+                switch cached.state {
+                case .failed:
                     // The shape carries the meaning, not the colour, and the
                     // message the sidebar no longer prints lives in the tooltip
                     // and the accessibility label.
@@ -320,6 +320,14 @@ struct WorkspaceView: View {
                         .foregroundStyle(.red)
                         .layoutPriority(2)
                         .accessibilityLabel("Not connected: \(cached.failure ?? "unknown error")")
+                case .connecting:
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.mini)
+                        .layoutPriority(2)
+                        .accessibilityLabel("Connecting")
+                case .ready:
+                    EmptyView()
                 }
             }
         } icon: {
@@ -392,7 +400,6 @@ struct WorkspaceView: View {
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if cached.state == .connecting { ProgressView("Discovering…") }
         } label: {
             HStack(spacing: 0) {
                 contextRowLabel(cached)
