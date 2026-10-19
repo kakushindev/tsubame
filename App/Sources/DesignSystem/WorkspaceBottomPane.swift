@@ -12,6 +12,9 @@ struct WorkspaceBottomPane<Content: View>: View {
     /// The height of the whole area the pane and the content share, so the pane can
     /// never be dragged past the point where the table disappears.
     let availableHeight: Double
+    /// Raised when the user works in the pane, so ⌘W closes a pane tool rather
+    /// than the resource tab behind it.
+    var focused: () -> Void = {}
     @ViewBuilder let content: (WorkspacePaneModel.Tool) -> Content
 
     @State private var dragStartHeight: Double?
@@ -37,6 +40,8 @@ struct WorkspaceBottomPane<Content: View>: View {
                 Divider()
                 content(tool)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Any interaction inside a tool counts as working in the pane.
+                    .onTapGesture(perform: focused)
             }
         }
         .frame(height: resolvedHeight)
@@ -50,7 +55,7 @@ struct WorkspaceBottomPane<Content: View>: View {
                 PaneTab(
                     tool: tool,
                     isSelected: tool.id == model.selection && !model.isCollapsed,
-                    select: { model.select(tool.id) },
+                    select: { model.select(tool.id); focused() },
                     close: { model.close(tool.id) }
                 )
             }

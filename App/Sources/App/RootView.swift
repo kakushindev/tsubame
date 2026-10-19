@@ -45,6 +45,10 @@ struct WorkspaceView: View {
     @State private var pending: PendingSelection?
     @State private var destination: Destination?
     @State private var pane = WorkspacePaneModel()
+    /// Which surface ⌘W acts on. Set where the user's attention moves, rather
+    /// than inferred, so the shortcut never closes something they were not
+    /// looking at.
+    @State private var paneHasFocus = false
     @State private var detailGeneration = UUID()
     @ScaledMetric(relativeTo: .body) private var tabLineHeight = 22.0
     @Environment(\.scenePhase) private var scenePhase
@@ -93,7 +97,8 @@ struct WorkspaceView: View {
                             resourceContent(session)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             if usesBottomPane, !pane.isEmpty {
-                                WorkspaceBottomPane(model: pane, availableHeight: proxy.size.height) { tool in
+                                WorkspaceBottomPane(model: pane, availableHeight: proxy.size.height,
+                                                    focused: { paneHasFocus = true }) { tool in
                                     switch tool.content {
                                     case .editor(let model): YAMLEditorView(model: model)
                                     case .logs(let model): LogsView(model: model)
@@ -132,6 +137,7 @@ struct WorkspaceView: View {
             }
         }
         .workspaceMinimumSize()
+        .focusedSceneValue(\.workspaceCommands, workspaceCommands)
         .task {
             clusters.loadDiscoveredConfigurations()
             #if DEBUG
@@ -515,6 +521,30 @@ struct WorkspaceView: View {
         } else { ProgressView("Discovering resources…").frame(maxWidth: .infinity, maxHeight: .infinity) }
     }
 
+    /// What ⌘W closes, and what the menu calls it.
+    private var workspaceCommands: WorkspaceCommands {
+        if paneHasFocus, let tool = pane.selected {
+            return WorkspaceCommands(
+                closeFocusedTab: {
+                    pane.close(tool.id)
+                    if pane.isEmpty { paneHasFocus = false }
+                },
+                closeFocusedTabTitle: "Close \(tool.kind.title)"
+            )
+        }
+        if let tab = tabs.selected {
+            return WorkspaceCommands(
+                closeFocusedTab: {
+                    let nextConnection = tabs.nextSelection(afterClosing: tab.id)?.connectionID
+                    request(.close(tab.id), target: nextConnection ?? session?.connection.id)
+                },
+                closeFocusedTabTitle: "Close \(ResourceKindPresentation.name(tab.resource))"
+            )
+        }
+        // Nothing to close, so ⌘W goes back to meaning Close Window.
+        return WorkspaceCommands()
+    }
+
     private func request(_ action: PendingSelection, target: UUID?) {
         if drafts.hasPendingDrafts && target != nil && target != session?.connection.id {
             pending = action; showDraftGuard = true
@@ -565,6 +595,7 @@ struct WorkspaceView: View {
         activateSelectedTab()
     }
     private func activateSelectedTab() {
+        paneHasFocus = false
         guard let tab = tabs.selected, let cached = sessions[tab.connectionID] else { return }
         session = cached
         kind = tab.resource
@@ -610,6 +641,7 @@ struct WorkspaceView: View {
             if usesBottomPane {
                 pane.open(.editor, id: "\(session.connection.id)/editor/\(target)",
                           subject: target.name, content: .editor(model))
+                paneHasFocus = true
                 return
             }
             tool = .editor(model)
@@ -618,6 +650,7 @@ struct WorkspaceView: View {
             if usesBottomPane {
                 pane.open(.logs, id: "\(session.connection.id)/logs/\(target)",
                           subject: target.name, content: .logs(model))
+                paneHasFocus = true
                 return
             }
             tool = .logs(model)
