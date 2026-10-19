@@ -8,6 +8,9 @@ let package = Package(
         .library(name: "KubeModels", targets: ["KubeModels"]),
         .library(name: "KubeKit", targets: ["KubeKit"]),
         .library(name: "KubeKeychain", targets: ["KubeKeychain"]),
+        // macOS only: everything inside is behind `#if os(macOS)`, so linking it
+        // on iOS yields an empty module rather than a build error.
+        .library(name: "KubeExec", targets: ["KubeExec"]),
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
@@ -27,6 +30,10 @@ let package = Package(
 
         // Layer 3: platform-backed implementation of KubeKit's storage contract.
         .target(name: "KubeKeychain", dependencies: ["KubeKit", "KubeModels"]),
+
+        // Layer 3: running a credential plugin as a subprocess. Separate so that
+        // `Process` stays out of KubeKit, and out of reach on iOS entirely.
+        .target(name: "KubeExec", dependencies: ["KubeKit", "KubeModels"]),
 
         // Test-only doubles, shared by the test targets.
         .target(name: "KubeTestSupport", dependencies: ["KubeKit", "KubeModels"]),

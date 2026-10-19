@@ -63,9 +63,15 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
       (macOS; iOS copies the value once and warns that it will expire)
 - [x] `CredentialStore` protocol and `EphemeralCredentialStore`
 - [x] `KeychainCredentialStore` (device-only, available after first unlock)
-- [ ] Client-certificate provider: PEM/PKCS#12 import to a `SecIdentity` (macOS)
-- [ ] OIDC provider: authorization code + PKCE, refresh, expiry handling
-- [ ] Exec credential plugin runner (macOS only), with the approval flow below
+- [x] Client-certificate provider: PEM import to a `SecIdentity` (macOS).
+      `SecItemImport` reads RSA PKCS#1, RSA PKCS#8 and EC SEC1; an EC key in
+      PKCS#8 is rebuilt as SEC1 first (`PrivateKeyPEM`). The key must be stored
+      with `kSecAttrApplicationLabel` set to its public-key hash or no identity
+      can ever be formed, however well both items store.
+- [x] OIDC provider: authorization code + PKCE, single-flight refresh, expiry a
+      minute early. The header carries the **ID token**, not the access token
+- [x] Exec credential plugin runner in its own `KubeExec` target (macOS only),
+      approval required before execution and bound to the command fingerprint
 - [ ] Per-platform support matrix published in the app and the README (PRD §9.1)
 
 ### Kubeconfig

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import KubeKit
+import KubeExec
 import KubeKeychain
 import KubeModels
 
@@ -15,17 +16,26 @@ final class AppEnvironment {
     let credentialStore: any CredentialStore
     let kubeconfigParser: any KubeconfigParsing
     let kubeconfigDiscovery: any KubeconfigDiscovery
+    let clientIdentities: (any ClientIdentityProviding)?
+    let execRunner: (any ExecPluginRunning)?
+    let execApprovals: any ExecApprovalGranting
     let platform: HostPlatform
 
     init(
         credentialStore: any CredentialStore,
         kubeconfigParser: any KubeconfigParsing,
         kubeconfigDiscovery: any KubeconfigDiscovery = AppEnvironment.platformKubeconfigDiscovery,
+        clientIdentities: (any ClientIdentityProviding)? = AppEnvironment.platformClientIdentities,
+        execRunner: (any ExecPluginRunning)? = AppEnvironment.platformExecRunner,
+        execApprovals: any ExecApprovalGranting = DecliningExecApproval(),
         platform: HostPlatform = .current
     ) {
         self.credentialStore = credentialStore
         self.kubeconfigParser = kubeconfigParser
         self.kubeconfigDiscovery = kubeconfigDiscovery
+        self.clientIdentities = clientIdentities
+        self.execRunner = execRunner
+        self.execApprovals = execApprovals
         self.platform = platform
     }
 
@@ -35,6 +45,26 @@ final class AppEnvironment {
         KubeconfigLocator()
         #else
         NoKubeconfigDiscovery()
+        #endif
+    }
+
+    /// Client certificates need the keychain-backed identity store, which is macOS
+    /// only in this release (PRD §9.1).
+    static var platformClientIdentities: (any ClientIdentityProviding)? {
+        #if os(macOS)
+        ClientIdentityStore()
+        #else
+        nil
+        #endif
+    }
+
+    /// iOS and iPadOS have no process to run, so there is nothing to return and the
+    /// UI must not imply otherwise.
+    static var platformExecRunner: (any ExecPluginRunning)? {
+        #if os(macOS)
+        ProcessExecPluginRunner()
+        #else
+        nil
         #endif
     }
 
@@ -50,7 +80,9 @@ final class AppEnvironment {
         AppEnvironment(
             credentialStore: EphemeralCredentialStore(),
             kubeconfigParser: KubeconfigParser(),
-            kubeconfigDiscovery: NoKubeconfigDiscovery()
+            kubeconfigDiscovery: NoKubeconfigDiscovery(),
+            clientIdentities: nil,
+            execRunner: nil
         )
     }
 
@@ -84,10 +116,22 @@ final class AppEnvironment {
         case .tokenFile(let path):
             // Re-read per request, so a rotated service-account token keeps working.
             return TokenFileCredentialProvider(path: path)
-        case .clientCertificate, .oidc, .execPlugin:
-            // Tracked in docs/IMPLEMENTATION_CHECKLIST.md. Until each provider
-            // exists, the connection fails with a precise error rather than
-            // silently sending unauthenticated requests.
+        case .clientCertificate:
+            guard let clientIdentities else {
+                return UnsupportedCredentialProvider(
+                    method: connection.authenticationMethod.displayName,
+                    platform: platform
+                )
+            }
+            return ClientCertificateCredentialProvider(
+                reference: connection.credentialReference,
+                identities: clientIdentities
+            )
+        case .oidc, .execPlugin:
+            // Both need something the composition root cannot supply on its own:
+            // OIDC a sign-in presenter, exec an approved and resolved command. They
+            // are built where that context exists, and until then the connection
+            // fails precisely rather than sending unauthenticated requests.
             return UnsupportedCredentialProvider(
                 method: connection.authenticationMethod.displayName,
                 platform: platform

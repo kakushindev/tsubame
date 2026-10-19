@@ -48,6 +48,10 @@ targets:
         product: KubeKeychain
       - package: KubeKit
         product: KubeModels
+      # Everything inside KubeExec is behind `#if os(macOS)`, so the iOS build
+      # links an empty module rather than reaching a `Process` it cannot use.
+      - package: KubeKit
+        product: KubeExec
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.kakushin.tsubame
