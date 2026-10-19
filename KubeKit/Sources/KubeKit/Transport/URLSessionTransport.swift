@@ -232,13 +232,20 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
             return .networkUnreachable(underlying: message)
         }
         switch urlError.code {
+        case .clientCertificateRejected, .clientCertificateRequired:
+            // The server's certificate is not the problem here: the cluster asked
+            // this app for a certificate it could not present. Reporting it as a
+            // trust failure sends the user to check the wrong end of the handshake.
+            return .invalidConfiguration(
+                reason: "This cluster requires a client certificate that could not be "
+                    + "presented. Import the context again, or check that its "
+                    + "certificate and key are still in the kubeconfig. (\(message))"
+            )
         case .serverCertificateUntrusted,
              .serverCertificateHasBadDate,
              .serverCertificateHasUnknownRoot,
              .serverCertificateNotYetValid,
-             .secureConnectionFailed,
-             .clientCertificateRejected,
-             .clientCertificateRequired:
+             .secureConnectionFailed:
             return .tlsTrustFailure(underlying: message)
         case .networkConnectionLost, .timedOut:
             return .streamInterrupted(underlying: message)

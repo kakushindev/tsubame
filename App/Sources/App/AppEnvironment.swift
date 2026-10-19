@@ -16,7 +16,7 @@ final class AppEnvironment {
     let credentialStore: any CredentialStore
     let kubeconfigParser: any KubeconfigParsing
     let kubeconfigDiscovery: any KubeconfigDiscovery
-    let clientIdentities: (any ClientIdentityProviding)?
+    let clientIdentities: (any ClientIdentityProviding & ClientIdentityImporting)?
     let execRunner: (any ExecPluginRunning)?
     let execApprovals: any ExecApprovalGranting
     let platform: HostPlatform
@@ -26,7 +26,7 @@ final class AppEnvironment {
         credentialStore: any CredentialStore,
         kubeconfigParser: any KubeconfigParsing,
         kubeconfigDiscovery: any KubeconfigDiscovery = AppEnvironment.platformKubeconfigDiscovery,
-        clientIdentities: (any ClientIdentityProviding)? = AppEnvironment.platformClientIdentities,
+        clientIdentities: (any ClientIdentityProviding & ClientIdentityImporting)? = AppEnvironment.platformClientIdentities,
         execRunner: (any ExecPluginRunning)? = AppEnvironment.platformExecRunner,
         execApprovals: any ExecApprovalGranting = DecliningExecApproval(),
         platform: HostPlatform = .current,
@@ -53,7 +53,7 @@ final class AppEnvironment {
 
     /// Client certificates need the keychain-backed identity store, which is macOS
     /// only in this release (PRD §9.1).
-    static var platformClientIdentities: (any ClientIdentityProviding)? {
+    static var platformClientIdentities: (any ClientIdentityProviding & ClientIdentityImporting)? {
         #if os(macOS)
         ClientIdentityStore()
         #else

@@ -43,7 +43,11 @@ final class ClusterListModel {
     init(environment: AppEnvironment, discovery: (any KubeconfigDiscovery)? = nil) {
         parser = environment.kubeconfigParser
         self.discovery = discovery ?? environment.kubeconfigDiscovery
-        importer = KubeconfigImporter(store: environment.credentialStore, platform: environment.platform)
+        importer = KubeconfigImporter(
+            store: environment.credentialStore,
+            identities: environment.clientIdentities,
+            platform: environment.platform
+        )
     }
 
     var discoveredConfigurations: [URL] { discovery.discoveredConfigurations() }

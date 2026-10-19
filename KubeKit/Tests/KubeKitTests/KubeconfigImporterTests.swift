@@ -15,6 +15,23 @@ private struct StubFileReader: KubeconfigFileReading {
     }
 }
 
+/// Records what an import stored, so the client-certificate path can be asserted
+/// without a keychain.
+private actor StubIdentityImporter: ClientIdentityImporting {
+    private(set) var imported: [CredentialReference: (certificate: Data, key: Data)] = [:]
+    private(set) var removed: [CredentialReference] = []
+
+    func importIdentity(
+        certificatePEM: Data, privateKeyPEM: Data, for reference: CredentialReference
+    ) async throws {
+        imported[reference] = (certificatePEM, privateKeyPEM)
+    }
+
+    func removeIdentity(for reference: CredentialReference) async throws {
+        removed.append(reference)
+    }
+}
+
 @Suite("KubeconfigImporter")
 struct KubeconfigImporterTests {
     private func kubeconfig(
@@ -35,12 +52,14 @@ struct KubeconfigImporterTests {
 
     private func importer(
         store: any CredentialStore = EphemeralCredentialStore(),
+        identities: (any ClientIdentityImporting)? = nil,
         files: [String: Data] = [:],
         platform: HostPlatform = .macOS,
         executable: @escaping KubeconfigImporter.ExecutableLocating = { _ in nil }
     ) -> KubeconfigImporter {
         KubeconfigImporter(
             store: store,
+            identities: identities,
             fileReader: StubFileReader(files: files),
             platform: platform,
             locateExecutable: executable
@@ -337,6 +356,97 @@ struct KubeconfigImporterTests {
         )
         #expect(plan.proxy?.kind == .http)
         #expect(plan.proxy?.port == 3128)
+    }
+
+    // MARK: - Client certificates
+
+    @Test("Importing a client-certificate context stores the identity")
+    func importsClientIdentity() async throws {
+        // Every context in a k3s or kubeadm kubeconfig authenticates this way. When
+        // the import stored nothing, the context imported cleanly, presented no
+        // certificate, and the server closed the connection — which surfaced as a
+        // TLS error blaming the cluster's certificate rather than the missing one.
+        let identities = StubIdentityImporter()
+        let config = kubeconfig(user: KubeconfigUser(
+            clientCertificateData: Data("CERT-PEM".utf8).base64EncodedString(),
+            clientKeyData: Data("KEY-PEM".utf8).base64EncodedString()
+        ))
+        let importer = importer(identities: identities)
+        let plan = try importer.plan(contextNamed: "prod-admin", in: config)
+
+        let connection = try await importer.import(plan, from: config)
+
+        let stored = try #require(await identities.imported[connection.credentialReference])
+        #expect(stored.certificate == Data("CERT-PEM".utf8))
+        #expect(stored.key == Data("KEY-PEM".utf8))
+    }
+
+    @Test("A client certificate held in files is read and stored")
+    func importsClientIdentityFromFiles() async throws {
+        let identities = StubIdentityImporter()
+        let config = kubeconfig(user: KubeconfigUser(
+            clientCertificate: "/certs/client.crt",
+            clientKey: "/certs/client.key"
+        ))
+        let importer = importer(
+            identities: identities,
+            files: ["/certs/client.crt": Data("FILE-CERT".utf8),
+                    "/certs/client.key": Data("FILE-KEY".utf8)]
+        )
+        let plan = try importer.plan(contextNamed: "prod-admin", in: config)
+
+        let connection = try await importer.import(plan, from: config)
+
+        let stored = try #require(await identities.imported[connection.credentialReference])
+        #expect(stored.certificate == Data("FILE-CERT".utf8))
+        #expect(stored.key == Data("FILE-KEY".utf8))
+    }
+
+    @Test("A client-certificate context without somewhere to store it refuses")
+    func refusesClientCertificateWithNoStore() async throws {
+        // Importing cleanly and failing later at the handshake is the behaviour
+        // this replaces.
+        let config = kubeconfig(user: KubeconfigUser(
+            clientCertificateData: Data("CERT".utf8).base64EncodedString(),
+            clientKeyData: Data("KEY".utf8).base64EncodedString()
+        ))
+        let importer = importer(identities: nil)
+        let plan = try importer.plan(contextNamed: "prod-admin", in: config)
+
+        await #expect(throws: KubernetesError.self) {
+            _ = try await importer.import(plan, from: config)
+        }
+    }
+
+    @Test("A certificate with no matching key names what is missing")
+    func refusesHalfAnIdentity() async throws {
+        let config = kubeconfig(user: KubeconfigUser(
+            clientCertificateData: Data("CERT".utf8).base64EncodedString()
+        ))
+        let importer = importer(identities: StubIdentityImporter())
+        let plan = try importer.plan(contextNamed: "prod-admin", in: config)
+
+        await #expect(throws: KubernetesError.self) {
+            _ = try await importer.import(plan, from: config)
+        }
+    }
+
+    @Test("A wrapped base64 certificate authority still decodes")
+    func toleratesWrappedBase64() throws {
+        // The strict decoder returns nil on wrapped base64, which left the cluster
+        // with no certificate authority and no indication of why.
+        let authority = Data("AUTHORITY-PEM-CONTENT-THAT-IS-LONG-ENOUGH-TO-WRAP".utf8)
+        let wrapped = authority.base64EncodedString(
+            options: [.lineLength64Characters, .endLineWithLineFeed]
+        )
+        let plan = try importer().plan(
+            contextNamed: "prod-admin",
+            in: kubeconfig(cluster: KubeconfigCluster(
+                server: "https://cluster.example:6443",
+                certificateAuthorityData: wrapped
+            ))
+        )
+        #expect(plan.tls.certificateAuthorityData == authority)
     }
 }
 

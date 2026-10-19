@@ -15,17 +15,20 @@ public struct KubeconfigImporter: Sendable {
     public typealias ExecutableLocating = @Sendable (String) -> URL?
 
     private let store: any CredentialStore
+    private let identities: (any ClientIdentityImporting)?
     private let fileReader: any KubeconfigFileReading
     private let platform: HostPlatform
     private let locateExecutable: ExecutableLocating
 
     public init(
         store: any CredentialStore,
+        identities: (any ClientIdentityImporting)? = nil,
         fileReader: any KubeconfigFileReading = LocalKubeconfigFileReader(),
         platform: HostPlatform = .current,
         locateExecutable: @escaping ExecutableLocating = KubeconfigImporter.searchPath
     ) {
         self.store = store
+        self.identities = identities
         self.fileReader = fileReader
         self.platform = platform
         self.locateExecutable = locateExecutable
@@ -110,7 +113,11 @@ public struct KubeconfigImporter: Sendable {
 
         // Inline data wins over a file reference, matching client-go. When both are
         // present and differ, say so rather than silently picking one.
-        let inline = cluster.certificateAuthorityData.flatMap { Data(base64Encoded: $0) }
+        // `.ignoreUnknownCharacters` because a kubeconfig written by hand or by a
+        // templating tool may wrap the base64, which the strict decoder rejects —
+        // silently, leaving the cluster with no certificate authority at all.
+        let inline = cluster.certificateAuthorityData
+            .flatMap { Data(base64Encoded: $0, options: .ignoreUnknownCharacters) }
         var fileData: Data?
         if let path = cluster.certificateAuthority {
             do {
@@ -331,7 +338,11 @@ public struct KubeconfigImporter: Sendable {
         let connectionID = UUID()
         let reference = CredentialReference(account: connectionID.uuidString)
 
-        if let credential = try credentialMaterial(
+        if case .clientCertificate = plan.authenticationMethod {
+            try await importClientIdentity(
+                for: plan, in: kubeconfig, sourceDirectory: sourceDirectory, reference: reference
+            )
+        } else if let credential = try credentialMaterial(
             for: plan, in: kubeconfig, sourceDirectory: sourceDirectory
         ) {
             try await store.store(credential, for: reference)
@@ -347,6 +358,72 @@ public struct KubeconfigImporter: Sendable {
             credentialReference: reference,
             tls: plan.tls,
             proxy: plan.proxy
+        )
+    }
+
+    /// Stores the kubeconfig's client certificate and key as a usable identity.
+    ///
+    /// A client certificate is two PEM blocks and a platform keychain entry rather
+    /// than the single `Data` a `CredentialStore` holds, so it has its own importer.
+    /// Without this step a context imports cleanly, presents no certificate, and the
+    /// server closes the connection — which surfaces as a TLS failure that blames
+    /// the cluster's certificate rather than the missing client one.
+    private func importClientIdentity(
+        for plan: KubeconfigImportPlan,
+        in kubeconfig: Kubeconfig,
+        sourceDirectory: URL?,
+        reference: CredentialReference
+    ) async throws {
+        guard let identities else {
+            throw KubernetesError.unsupportedAuthentication(
+                method: "Client certificate",
+                platform: platform
+            )
+        }
+        guard let user = kubeconfig.user(named: plan.credentialUser) else {
+            throw KubernetesError.invalidConfiguration(
+                reason: "The context's user entry is missing, so there is no certificate to import."
+            )
+        }
+        let certificate = try pemMaterial(
+            inline: user.clientCertificateData,
+            path: user.clientCertificate,
+            describing: "client certificate",
+            sourceDirectory: sourceDirectory
+        )
+        let key = try pemMaterial(
+            inline: user.clientKeyData,
+            path: user.clientKey,
+            describing: "client key",
+            sourceDirectory: sourceDirectory
+        )
+        try await identities.importIdentity(
+            certificatePEM: certificate,
+            privateKeyPEM: key,
+            for: reference
+        )
+    }
+
+    /// Resolves a PEM field that may be inline base64 or a file reference.
+    private func pemMaterial(
+        inline: String?,
+        path: String?,
+        describing field: String,
+        sourceDirectory: URL?
+    ) throws -> Data {
+        if let inline {
+            guard let decoded = Data(base64Encoded: inline, options: .ignoreUnknownCharacters) else {
+                throw KubernetesError.invalidConfiguration(
+                    reason: "This context's \(field) is not valid base64."
+                )
+            }
+            return decoded
+        }
+        if let path {
+            return try fileReader.contents(ofPath: path, relativeTo: sourceDirectory)
+        }
+        throw KubernetesError.invalidConfiguration(
+            reason: "This context authenticates with a client certificate but carries no \(field)."
         )
     }
 
