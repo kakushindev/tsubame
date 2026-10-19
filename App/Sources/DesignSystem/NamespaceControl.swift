@@ -19,7 +19,11 @@ struct NamespaceControl: View {
 
     let selected: [String]
     let change: ([String]) -> String?
-    var load: (@Sendable () async -> Options)?
+    /// What was read last time. Shown at once, so opening the control is instant
+    /// and does not flash a spinner over a list that is almost certainly current.
+    var cached: Options?
+    /// Re-reads in the background while the cached list is already on screen.
+    var refresh: (@Sendable () async -> Options)?
 
     @State private var showing = false
     @State private var draft = ""
@@ -78,10 +82,14 @@ struct NamespaceControl: View {
             content
                 .frame(width: 280)
                 .task(id: showing) {
-                    guard showing, let load else { return }
-                    options = .loading
-                    options = await load()
+                    guard showing else { return }
+                    // Only the very first open has nothing to show.
+                    options = cached ?? .loading
                     searchFocused = true
+                    guard let refresh else { return }
+                    let latest = await refresh()
+                    guard !Task.isCancelled else { return }
+                    options = latest
                 }
         }
     }

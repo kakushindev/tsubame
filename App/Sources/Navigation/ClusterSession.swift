@@ -99,12 +99,40 @@ final class ClusterSession: Identifiable {
         await discover()
     }
 
-    /// The cluster's namespaces, for the scope control.
+    /// The namespaces last read from this cluster.
     ///
+    /// Held for the life of the context so opening the scope control does not
+    /// re-ask the cluster every time. In memory only, and gone with the session:
+    /// nothing the cluster returns is written anywhere (PRD §12).
+    private(set) var namespaceOptions: NamespaceControl.Options?
+
+    /// Re-reads the namespaces and keeps the result when it says something new.
+    ///
+    /// A list that comes back unchanged leaves the cached value alone, so the
+    /// control does not redraw for nothing. A read that fails after a good list
+    /// keeps the list: one refused or dropped request is not evidence the
+    /// namespaces went away, and dropping them would take away the names the user
+    /// is working with.
+    @discardableResult
+    func refreshNamespaces() async -> NamespaceControl.Options {
+        let fresh = await loadNamespaces()
+        switch (namespaceOptions, fresh) {
+        case (.some(.loaded(let known)), .loaded(let found)) where known == found:
+            break
+        case (_, .loaded):
+            namespaceOptions = fresh
+        case (.some(.loaded), _):
+            break
+        default:
+            namespaceOptions = fresh
+        }
+        return namespaceOptions ?? fresh
+    }
+
     /// A denial is its own answer rather than an error: an account may be allowed
     /// to work inside a namespace and not to enumerate them, and the control says
     /// so instead of showing an empty menu (PRD §12).
-    func namespaces() async -> NamespaceControl.Options {
+    private func loadNamespaces() async -> NamespaceControl.Options {
         guard let resource = catalog?.resource(forKind: "Namespace", inGroup: "") else {
             return .denied
         }
@@ -122,6 +150,11 @@ final class ClusterSession: Identifiable {
             return .failed(error.localizedDescription)
         }
     }
+
+    #if DEBUG
+    /// Lets a test supply the catalog that discovery would otherwise fetch.
+    func adoptCatalogForTesting(_ value: APIResourceCatalog) { catalog = value }
+    #endif
 
     var resources: [DiscoveredResource] {
         guard let catalog else { return [] }
