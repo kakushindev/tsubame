@@ -13,6 +13,8 @@ public struct ClusterConnection: Hashable, Sendable, Identifiable, Codable {
     public var authenticationMethod: AuthenticationMethod
     public var credentialReference: CredentialReference
     public var tls: TLSConfiguration
+    /// From the kubeconfig cluster's `proxy-url`. `nil` means a direct connection.
+    public var proxy: ProxyConfiguration?
 
     public init(
         id: UUID = UUID(),
@@ -22,7 +24,8 @@ public struct ClusterConnection: Hashable, Sendable, Identifiable, Codable {
         defaultNamespace: String = ClusterConnection.defaultNamespaceName,
         authenticationMethod: AuthenticationMethod,
         credentialReference: CredentialReference,
-        tls: TLSConfiguration
+        tls: TLSConfiguration,
+        proxy: ProxyConfiguration? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -32,6 +35,7 @@ public struct ClusterConnection: Hashable, Sendable, Identifiable, Codable {
         self.authenticationMethod = authenticationMethod
         self.credentialReference = credentialReference
         self.tls = tls
+        self.proxy = proxy
     }
 
     /// PRD §9.1: a newly selected context starts in `default`.
@@ -42,6 +46,11 @@ public struct ClusterConnection: Hashable, Sendable, Identifiable, Codable {
 /// `isSupported(on:)` rather than assuming every case works everywhere.
 public enum AuthenticationMethod: Hashable, Sendable, Codable {
     case bearerToken
+    /// A bearer token read from a file on each use, rather than copied once.
+    ///
+    /// Service-account tokens are rotated, so a copy taken at import eventually
+    /// stops working. Re-reading needs a local file, which is macOS-only.
+    case tokenFile(path: String)
     case clientCertificate
     case oidc(issuer: URL, clientID: String, scopes: [String])
     /// A kubeconfig `exec` credential plugin. macOS only, and only after the user
@@ -52,6 +61,8 @@ public enum AuthenticationMethod: Hashable, Sendable, Codable {
         switch self {
         case .bearerToken, .oidc:
             return true
+        case .tokenFile:
+            return platform == .macOS
         case .clientCertificate:
             return platform == .macOS
         case .execPlugin:

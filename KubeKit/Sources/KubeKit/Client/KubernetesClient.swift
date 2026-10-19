@@ -28,10 +28,18 @@ public final class KubernetesClient: Sendable {
     /// A `429` or `503` carries `Retry-After` and is honored exactly; everything
     /// else surfaces to the caller, because a repeated 403 or 409 needs the user.
     public func send(_ request: APIRequest) async throws -> Data {
+        try await perform(request).body
+    }
+
+    /// The full response, including headers.
+    ///
+    /// A dry-run's `Warning:` headers are part of what the user is asked to review,
+    /// so the write path needs the response rather than just the body.
+    public func perform(_ request: APIRequest) async throws -> APIResponse {
         var attempt = 0
         while true {
             let response = try await transport.send(request)
-            if response.isSuccess { return response.body }
+            if response.isSuccess { return response }
 
             let error = errorMapper.error(
                 statusCode: response.statusCode,
@@ -44,8 +52,18 @@ public final class KubernetesClient: Sendable {
                 throw error
             }
             attempt += 1
+            // Cancellation during the wait is cancellation, not a cluster failure:
+            // `CancellationError` propagates untouched.
             try await Task.sleep(for: .seconds(retryAfter))
         }
+    }
+
+    /// A line stream carrying the client's error mapping.
+    ///
+    /// Pod logs go through this rather than the transport directly, so a 403 on a
+    /// log request becomes `.permissionDenied` exactly as it does for a list.
+    public func stream(_ request: APIRequest) async throws -> AsyncThrowingStream<Data, any Error> {
+        try await transport.lines(for: request)
     }
 
     public func get<Object: ResourceObject & Codable>(

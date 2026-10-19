@@ -12,18 +12,50 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
     private let trustEvaluator: ServerTrustEvaluator
     private let errorMapper: KubernetesErrorMapper
     private let redactor: CredentialRedactor
+    private let proxy: ProxyConfiguration?
+    /// Set when a proxy was configured that this platform cannot apply. Every
+    /// request then fails with it, because the alternative — connecting directly —
+    /// quietly ignores something the user asked for.
+    private let proxyFailure: KubernetesError?
     private lazy var session: URLSession = {
+        let configuration = Self.baseConfiguration()
+        configuration.connectionProxyDictionary = proxyDictionary()
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
+
+    /// A second session for watches and log follows.
+    ///
+    /// `timeoutIntervalForRequest` is an *inter-packet* timeout, not a total one, so
+    /// the 60-second default kills a watch on a namespace that simply has nothing to
+    /// report — and the client then reports a permanent reconnect loop that reads as
+    /// a server fault. A stream's liveness is governed by `ListOptions.timeoutSeconds`
+    /// and watch bookmarks instead, so both timeouts are effectively disabled here.
+    private lazy var streamingSession: URLSession = {
+        let configuration = Self.baseConfiguration()
+        configuration.connectionProxyDictionary = proxyDictionary()
+        configuration.timeoutIntervalForRequest = Self.streamingTimeout
+        configuration.timeoutIntervalForResource = Self.streamingTimeout
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
+
+    private static func baseConfiguration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    }()
+        return configuration
+    }
+
+    /// A week. Long enough that no healthy stream reaches it, finite so a wedged
+    /// one is eventually reclaimed.
+    private static let streamingTimeout: TimeInterval = 7 * 24 * 60 * 60
 
     public init(
         serverURL: URL,
         credentialProvider: any CredentialProvider,
         tls: TLSConfiguration,
+        proxy: ProxyConfiguration? = nil,
+        platform: HostPlatform = .current,
         errorMapper: KubernetesErrorMapper = KubernetesErrorMapper(),
         redactor: CredentialRedactor = CredentialRedactor()
     ) {
@@ -32,9 +64,37 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
         self.trustEvaluator = ServerTrustEvaluator(configuration: tls)
         self.errorMapper = errorMapper
         self.redactor = redactor
+        self.proxy = proxy
+        if let proxy, !proxy.isSupported(on: platform) {
+            self.proxyFailure = .invalidConfiguration(
+                reason: "This cluster is configured to use the proxy \(proxy.displayName), "
+                    + "which \(platform == .macOS ? "macOS" : "iOS and iPadOS") cannot apply. "
+                    + "Connecting without it would ignore a setting you asked for, so the "
+                    + "connection is refused instead."
+            )
+        } else {
+            self.proxyFailure = nil
+        }
+    }
+
+    /// Proxy settings for a `URLSessionConfiguration`.
+    ///
+    /// String keys rather than the `kCFNetworkProxies…` constants, because the SOCKS
+    /// ones do not exist on iOS — the values are the same either way.
+    private func proxyDictionary() -> [AnyHashable: Any]? {
+        guard let proxy, let host = proxy.host else { return nil }
+        switch proxy.kind {
+        case .http:
+            return ["HTTPEnable": 1, "HTTPProxy": host, "HTTPPort": proxy.port]
+        case .https:
+            return ["HTTPSEnable": 1, "HTTPSProxy": host, "HTTPSPort": proxy.port]
+        case .socks5:
+            return ["SOCKSEnable": 1, "SOCKSProxy": host, "SOCKSPort": proxy.port]
+        }
     }
 
     public func send(_ request: APIRequest) async throws -> APIResponse {
+        if let proxyFailure { throw proxyFailure }
         let urlRequest = try await urlRequest(for: request)
         do {
             let (data, response) = try await session.data(for: urlRequest)
@@ -49,16 +109,18 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
         } catch let error as KubernetesError {
             throw error
         } catch {
+            if Self.isCancellation(error) { throw CancellationError() }
             throw mapped(error)
         }
     }
 
     public func lines(for request: APIRequest) async throws -> AsyncThrowingStream<Data, any Error> {
+        if let proxyFailure { throw proxyFailure }
         var streaming = request
         streaming.timeout = nil
         let urlRequest = try await urlRequest(for: streaming)
 
-        let (byteStream, response) = try await session.bytes(for: urlRequest)
+        let (byteStream, response) = try await streamingSession.bytes(for: urlRequest)
         guard let http = response as? HTTPURLResponse else {
             throw KubernetesError.decodingFailure(reason: "The response was not an HTTP response.")
         }
@@ -73,16 +135,25 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
             )
         }
 
+        let limit = request.maximumLineLength
         return AsyncThrowingStream { continuation in
             let task = Task {
+                var chunker = LineChunker(maximumLineLength: limit)
                 do {
-                    for try await line in byteStream.lines {
-                        continuation.yield(Data(line.utf8))
+                    for try await byte in byteStream {
+                        if let line = chunker.consume(byte) { continuation.yield(line) }
                     }
-                    continuation.finish()
-                } catch is CancellationError {
+                    // A stream may end mid-line; that partial line is still data the
+                    // caller asked for.
+                    if let trailing = chunker.flush() { continuation.yield(trailing) }
                     continuation.finish()
                 } catch {
+                    // A cancelled stream is a closed view, not a failure: finish
+                    // quietly rather than handing the consumer an error to render.
+                    guard !Self.isCancellation(error) else {
+                        continuation.finish()
+                        return
+                    }
                     continuation.finish(throwing: self.mapped(error))
                 }
             }
@@ -113,6 +184,15 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
             urlRequest.setValue(value, forHTTPHeaderField: field)
         }
         return urlRequest
+    }
+
+    /// Whether a failure is this task being cancelled rather than anything the
+    /// cluster did. `URLSession` reports cancellation as a `URLError`, so without
+    /// this a closed view would surface as a network failure and be rendered as one.
+    static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return false
     }
 
     private func mapped(_ error: any Error) -> KubernetesError {

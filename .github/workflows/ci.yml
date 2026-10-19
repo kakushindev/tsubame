@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    # Not pinned to a specific image or Xcode path: the deployment targets are
+    # macOS 14 / iOS 17, so any reasonably current toolchain builds this. Pin it
+    # here if a toolchain change ever breaks the build.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            KubeKit/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-${{ hashFiles('KubeKit/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      # The package suite needs no simulator and no project generation, so it is
+      # the fastest way to find out the build is broken. Run it first.
+      - name: Test KubeKit
+        run: swift test --package-path KubeKit
+
+      - name: Install build tools
+        run: brew install xcodegen xcbeautify
+
+      # The .xcodeproj is a build artifact: it must be reproducible from
+      # project.yml alone, so CI generates it rather than trusting a checked-in one.
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Test on macOS
+        # `shell: bash` runs with -eo pipefail, so a failing xcodebuild is not
+        # masked by xcbeautify's own exit code.
+        shell: bash
+        run: |
+          xcodebuild test \
+            -project Tsubame.xcodeproj \
+            -scheme Tsubame \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+        env:
+          NSUnbufferedIO: YES
+
+      - name: Build for iOS Simulator
+        shell: bash
+        run: |
+          xcodebuild build \
+            -project Tsubame.xcodeproj \
+            -scheme Tsubame \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+        env:
+          NSUnbufferedIO: YES

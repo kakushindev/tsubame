@@ -28,6 +28,12 @@ public struct APIRequest: Hashable, Sendable {
     public var body: Data?
     /// `nil` for a stream; a stream must not be subject to a response timeout.
     public var timeout: TimeInterval?
+    /// The longest line a streaming response may buffer before it is cut.
+    ///
+    /// The bound has to live here, below the log and watch layers, because a line
+    /// that grows without a terminator grows in the transport's buffer. A limit set
+    /// only above this point would describe memory it does not control.
+    public var maximumLineLength: Int
 
     public init(
         method: Method,
@@ -35,7 +41,8 @@ public struct APIRequest: Hashable, Sendable {
         queryItems: [URLQueryItem] = [],
         headers: [String: String] = [:],
         body: Data? = nil,
-        timeout: TimeInterval? = 30
+        timeout: TimeInterval? = 30,
+        maximumLineLength: Int = APIRequest.defaultMaximumLineLength
     ) {
         self.method = method
         self.path = path
@@ -43,7 +50,15 @@ public struct APIRequest: Hashable, Sendable {
         self.headers = headers
         self.body = body
         self.timeout = timeout
+        self.maximumLineLength = maximumLineLength
     }
+
+    /// Generous, because a watch event is one JSON object per line and a large
+    /// object is legitimate.
+    public static let defaultMaximumLineLength = 1 << 20
+    /// Tighter, because a log line past this is already past anything a person
+    /// reads, and the buffer bound matters more than the tail of the line.
+    public static let logMaximumLineLength = 8 * 1024
 
     /// Marks the request as a server-side dry run.
     ///

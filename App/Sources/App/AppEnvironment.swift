@@ -61,7 +61,9 @@ final class AppEnvironment {
             transport: URLSessionTransport(
                 serverURL: connection.serverURL,
                 credentialProvider: makeCredentialProvider(for: connection),
-                tls: connection.tls
+                tls: connection.tls,
+                proxy: connection.proxy,
+                platform: platform
             )
         )
     }
@@ -79,6 +81,9 @@ final class AppEnvironment {
                 reference: connection.credentialReference,
                 store: credentialStore
             )
+        case .tokenFile(let path):
+            // Re-read per request, so a rotated service-account token keeps working.
+            return TokenFileCredentialProvider(path: path)
         case .clientCertificate, .oidc, .execPlugin:
             // Tracked in docs/IMPLEMENTATION_CHECKLIST.md. Until each provider
             // exists, the connection fails with a precise error rather than
@@ -95,6 +100,7 @@ extension AuthenticationMethod {
     var displayName: String {
         switch self {
         case .bearerToken: return "Bearer token"
+        case .tokenFile: return "Token file"
         case .clientCertificate: return "Client certificate"
         case .oidc: return "OIDC"
         case .execPlugin: return "Exec credential plugin"
