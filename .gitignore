@@ -23,7 +23,20 @@ xcuserdata/
 # macOS
 .DS_Store
 
+# Test output
+*.xcresult
+
 # Local credentials and cluster configuration must never be committed.
+#
+# These patterns are anchored to the repository root on purpose. An unanchored
+# `kubeconfig` matches at every level, and macOS's case-insensitive filesystem
+# makes it match the `Kubeconfig/` source directories too — which silently
+# excluded every kubeconfig parser and importer source file from the repository.
 *.kubeconfig
-kubeconfig
-.kube/
+/kubeconfig
+/kubeconfig.yaml
+/kubeconfig.yml
+/.kube/
+
+# Belt and braces: no credential rule may ever exclude source.
+!*.swift
