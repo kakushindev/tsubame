@@ -151,6 +151,18 @@ final class ClusterSession: Identifiable {
         }
     }
 
+    /// Stops this context's work and forgets what it had read.
+    ///
+    /// Called when the user disconnects: the client is about to be dropped, and a
+    /// discovery sweep still running against a cluster nobody is watching is both
+    /// wasted and a request the user did not ask for.
+    func invalidate() async {
+        await discovery.invalidate()
+        catalog = nil
+        namespaceOptions = nil
+        failure = nil
+    }
+
     #if DEBUG
     /// Lets a test supply the catalog that discovery would otherwise fetch.
     func adoptCatalogForTesting(_ value: APIResourceCatalog) { catalog = value }

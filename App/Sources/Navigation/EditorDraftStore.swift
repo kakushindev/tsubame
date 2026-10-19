@@ -16,4 +16,12 @@ final class EditorDraftStore {
     func save(_ text: String, for key: Key) { drafts[key] = text }
     func remove(_ key: Key) { drafts.removeValue(forKey: key) }
     func discardAll() { drafts.removeAll() }
+
+    func hasDrafts(for connectionID: UUID) -> Bool {
+        drafts.keys.contains { $0.connectionID == connectionID }
+    }
+
+    func discard(for connectionID: UUID) {
+        drafts = drafts.filter { $0.key.connectionID != connectionID }
+    }
 }

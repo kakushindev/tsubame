@@ -56,6 +56,7 @@ struct WorkspaceView: View {
 
     private enum PendingSelection {
         case context(String), tab(String), resource(UUID, DiscoveredResource), close(String)
+        case disconnect(UUID)
     }
     /// Only confirmations present modally now. A delete or a scale is exactly the
     /// case a modal is for: it wants protected focus and a deliberate answer.
@@ -227,14 +228,7 @@ struct WorkspaceView: View {
                 .buttonStyle(.plain)
                 .help("Connect to \(context.name)")
                 .contextMenu {
-                    // Reviewing a context's identity and warnings before connecting
-                    // is still available, just no longer in the way of connecting.
-                    Button("Review in Manage Contexts…") {
-                        clusters.selection = context.id
-                        showingConnections = true
-                        inspecting = false
-                        revealContent()
-                    }
+                    contextMenuItems(connected: nil, contextID: context.id, connection: nil)
                 }
             }
         }
@@ -271,6 +265,9 @@ struct WorkspaceView: View {
             // group being looked at.
             if cached.state == .failed { retryButton(cached).padding(.trailing, 4) }
         }
+        .contextMenu {
+            contextMenuItems(connected: cached, contextID: nil, connection: cached.connection)
+        }
         if expanded.wrappedValue {
             ForEach(ResourceKindPresentation.Category.allCases) { category in
                 let resources = cached.resources.filter { ResourceKindPresentation.category($0) == category }
@@ -304,6 +301,29 @@ struct WorkspaceView: View {
                     Text(discoveryFailure(group, failures[group])).font(.caption).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    /// What right-clicking a context offers, on either kind of row.
+    @ViewBuilder private func contextMenuItems(
+        connected: ClusterSession?, contextID: String?, connection: ClusterConnection?
+    ) -> some View {
+        if let connected {
+            if connected.state == .failed {
+                Button("Try Again") { Task { await connected.retry() } }
+            }
+            Button("Disconnect") { requestDisconnect(connected.connection.id) }
+        } else if let contextID {
+            Button("Connect") {
+                clusters.selection = contextID
+                inspecting = false
+                showingConnections = false
+                requestConnect()
+            }
+        }
+        Divider()
+        if let id = contextID ?? connection.flatMap({ clusters.contextID(forConnection: $0.id) }) {
+            Button("Show Cluster Settings…") { showSettings(forContext: id) }
         }
     }
 
@@ -413,6 +433,9 @@ struct WorkspaceView: View {
                     Spacer(minLength: 8)
                     retryButton(cached)
                 }
+            }
+            .contextMenu {
+                contextMenuItems(connected: cached, contextID: nil, connection: cached.connection)
             }
         }
     }
@@ -557,6 +580,9 @@ struct WorkspaceView: View {
         case .tab(let id): tabs.select(id); activateSelectedTab()
         case .resource(let id, let resource):
             if let cached = sessions[id] { openResource(resource, in: cached) }
+        case .disconnect(let id):
+            drafts.discard(for: id)
+            disconnect(id)
         case .close(let id):
             let wasSelected = tabs.selection == id
             tabs.close(id)
@@ -566,6 +592,47 @@ struct WorkspaceView: View {
             }
         }
     }
+    /// Closes a context: its tabs, its pane tools, its discovery and its session.
+    ///
+    /// The connection itself is kept, so the context stays in the navigator and can
+    /// be reconnected without importing it again.
+    private func disconnect(_ connectionID: UUID) {
+        for tab in tabs.items where tab.connectionID == connectionID { tabs.close(tab.id) }
+        pane.closeAll(matching: "\(connectionID)")
+        if let cached = sessions[connectionID] {
+            Task { await cached.invalidate() }
+        }
+        sessions[connectionID] = nil
+        expandedContexts.remove(connectionID)
+        expandedGroups = expandedGroups.filter { !$0.hasPrefix("\(connectionID)/") }
+
+        if session?.connection.id == connectionID {
+            session = nil
+            kind = nil
+            clearSelection()
+            // Fall through to whatever else is open rather than an empty window.
+            if tabs.selected != nil { activateSelectedTab() }
+        }
+    }
+
+    /// Unsaved YAML is never discarded without asking (PRD §9.4).
+    private func requestDisconnect(_ connectionID: UUID) {
+        if drafts.hasDrafts(for: connectionID) {
+            pending = .disconnect(connectionID)
+            showDraftGuard = true
+        } else {
+            disconnect(connectionID)
+        }
+    }
+
+    /// Opens a context's settings where they live: its row in Manage Contexts.
+    private func showSettings(forContext id: String) {
+        clusters.selection = id
+        showingConnections = true
+        inspecting = false
+        revealContent()
+    }
+
     private func requestConnect() {
         guard let id = clusters.selection else { return }
         let target = clusters.connection(forContextID: id)?.id

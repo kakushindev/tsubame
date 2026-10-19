@@ -87,4 +87,19 @@ struct NamespaceCacheTests {
         // control has to say so rather than show an empty list (PRD §12).
         #expect(await subject.refreshNamespaces() == .denied)
     }
+
+    @Test("Invalidating a session forgets what it had read")
+    func invalidateClearsState() async throws {
+        let subject = session([namespaceList(["a", "b"])])
+        subject.adoptCatalogForTesting(discovered())
+        #expect(await subject.refreshNamespaces() == .loaded(["a", "b"]))
+
+        await subject.invalidate()
+
+        // Nothing is kept from a context the user closed: reconnecting reads the
+        // cluster again rather than showing what it looked like before.
+        #expect(subject.namespaceOptions == nil)
+        #expect(subject.catalog == nil)
+        #expect(subject.state == .connecting)
+    }
 }

@@ -113,6 +113,12 @@ final class ClusterListModel {
         } catch { importState = .failed(error.localizedDescription); return nil }
     }
 
+    /// The context entry a saved connection came from, for a row that only knows
+    /// the connection it is showing.
+    func contextID(forConnection id: UUID) -> String? {
+        savedContexts.first { $0.value == id }?.key
+    }
+
     func connection(forContextID id: String) -> ClusterConnection? {
         guard let connectionID = savedContexts[id] else { return nil }
         return connections.first { $0.id == connectionID }

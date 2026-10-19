@@ -66,4 +66,21 @@ struct WorkspaceTabsTests {
         tabs.setNamespaces([])
         #expect(tabs.selected?.namespaces == ["tools", "payments", "default"])
     }
+
+    @Test("Disconnecting closes every tab belonging to that context, and no others")
+    func disconnectClosesItsOwnTabs() throws {
+        let tabs = WorkspaceTabs()
+        let local = connection("local"), production = connection("production")
+        tabs.open(pods, connection: local)
+        tabs.open(services, connection: local)
+        tabs.open(pods, connection: production)
+        #expect(tabs.items.count == 3)
+
+        for tab in tabs.items where tab.connectionID == local.id { tabs.close(tab.id) }
+
+        // The other context keeps its tab and becomes the selection.
+        #expect(tabs.items.count == 1)
+        #expect(tabs.items.first?.connectionID == production.id)
+        #expect(tabs.selected?.connectionID == production.id)
+    }
 }
