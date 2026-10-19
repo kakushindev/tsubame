@@ -44,6 +44,7 @@ struct WorkspaceView: View {
     @State private var showDraftGuard = false
     @State private var pending: PendingSelection?
     @State private var destination: Destination?
+    @State private var pane = WorkspacePaneModel()
     @State private var detailGeneration = UUID()
     @ScaledMetric(relativeTo: .body) private var tabLineHeight = 22.0
     @Environment(\.scenePhase) private var scenePhase
@@ -52,6 +53,10 @@ struct WorkspaceView: View {
     private enum PendingSelection {
         case context(String), tab(String), resource(UUID, DiscoveredResource), close(String)
     }
+    /// Only confirmations present modally now. A delete or a scale is exactly the
+    /// case a modal is for: it wants protected focus and a deliberate answer.
+    /// Editing YAML and reading logs moved to the bottom pane, because both are
+    /// things the user keeps open while looking something else up.
     private struct Destination: Identifiable {
         enum Tool {
             case editor(YAMLEditorModel), logs(LogsModel), action(ResourceActionModel)
@@ -59,6 +64,10 @@ struct WorkspaceView: View {
         let id = UUID()
         let tool: Tool
     }
+
+    /// The pane needs the window's height to keep itself from swallowing the table;
+    /// on iPhone there is no height to share, so tools stay full-screen there.
+    private var usesBottomPane: Bool { sizeClass == .regular }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
@@ -73,10 +82,27 @@ struct WorkspaceView: View {
                 }
                 #endif
                 if !tabs.items.isEmpty { tabStrip }
-                if session == nil || showingConnections {
+                if showingConnections {
                     ClusterConnectionsView(model: clusters, connect: requestConnect,
                                            back: session == nil ? nil : { showingConnections = false })
-                } else if let session { resourceContent(session) }
+                } else if session == nil {
+                    welcome
+                } else if let session {
+                    GeometryReader { proxy in
+                        VStack(spacing: 0) {
+                            resourceContent(session)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            if usesBottomPane, !pane.isEmpty {
+                                WorkspaceBottomPane(model: pane, availableHeight: proxy.size.height) { tool in
+                                    switch tool.content {
+                                    case .editor(let model): YAMLEditorView(model: model)
+                                    case .logs(let model): LogsView(model: model)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .toolbar {
                 if usesTouchNavigation && sizeClass == .regular {
@@ -134,6 +160,9 @@ struct WorkspaceView: View {
             Button("Keep Editing", role: .cancel) { pending = nil }
             Button("Discard Drafts and Switch", role: .destructive) {
                 drafts.discardAll()
+                // Close the editors that held them too, or the pane keeps showing
+                // text the store no longer has.
+                for tool in pane.tools where tool.kind == .editor { pane.close(tool.id) }
                 if let pending { perform(pending) }
                 pending = nil
             }
@@ -180,9 +209,9 @@ struct WorkspaceView: View {
             } else {
                 Button {
                     clusters.selection = context.id
-                    showingConnections = true
                     inspecting = false
-                    revealContent()
+                    showingConnections = false
+                    requestConnect()
                 } label: {
                     Label(context.name, systemImage: "server.rack")
                         .padding(.leading, usesTouchNavigation ? 0 : 26)
@@ -190,7 +219,17 @@ struct WorkspaceView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Review and connect to \(context.name)")
+                .help("Connect to \(context.name)")
+                .contextMenu {
+                    // Reviewing a context's identity and warnings before connecting
+                    // is still available, just no longer in the way of connecting.
+                    Button("Review in Manage Contexts…") {
+                        clusters.selection = context.id
+                        showingConnections = true
+                        inspecting = false
+                        revealContent()
+                    }
+                }
             }
         }
         // An edited import can replace its staging entry without changing an already-open target.
@@ -346,6 +385,32 @@ struct WorkspaceView: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
+    /// What the window shows before anything is connected.
+    ///
+    /// The context table used to stand here, which made choosing a cluster feel
+    /// like a form to complete before the app would start. This says what to do and
+    /// leaves the sidebar to do it.
+    @ViewBuilder private var welcome: some View {
+        if clusters.availableContexts.isEmpty && clusters.connections.isEmpty {
+            ContentUnavailableView {
+                Label("No clusters yet", systemImage: "point.3.connected.trianglepath.dotted")
+            } description: {
+                Text("Import a kubeconfig to see your contexts.")
+            } actions: {
+                Button("Manage Contexts…") {
+                    showingConnections = true
+                    revealContent()
+                }
+            }
+        } else {
+            ContentUnavailableView {
+                Label("Not connected", systemImage: "point.3.connected.trianglepath.dotted")
+            } description: {
+                Text("Choose a context in the sidebar to connect.")
+            }
+        }
+    }
+
     @ViewBuilder private func resourceContent(_ session: ClusterSession) -> some View {
         if let kind, let tab = tabs.selected {
             if scenePhase == .active {
@@ -458,8 +523,21 @@ struct WorkspaceView: View {
         switch action {
         case .edit:
             let key = EditorDraftStore.Key(connectionID: session.connection.id, target: target)
-            tool = .editor(YAMLEditorModel(cluster: cluster, key: key, original: object.raw, writer: session.writer, drafts: drafts))
-        case .logs: tool = .logs(LogsModel(cluster: cluster, pod: object, client: session.client))
+            let model = YAMLEditorModel(cluster: cluster, key: key, original: object.raw, writer: session.writer, drafts: drafts)
+            if usesBottomPane {
+                pane.open(.editor, id: "\(session.connection.id)/editor/\(target)",
+                          subject: target.name, content: .editor(model))
+                return
+            }
+            tool = .editor(model)
+        case .logs:
+            let model = LogsModel(cluster: cluster, pod: object, client: session.client)
+            if usesBottomPane {
+                pane.open(.logs, id: "\(session.connection.id)/logs/\(target)",
+                          subject: target.name, content: .logs(model))
+                return
+            }
+            tool = .logs(model)
         case .delete: tool = .action(ResourceActionModel(action: .delete, cluster: cluster, target: target, original: object, writer: session.writer))
         case .restart: tool = .action(ResourceActionModel(action: .restart, cluster: cluster, target: target, original: object, writer: session.writer))
         case .scale: tool = .action(ResourceActionModel(action: .scale, cluster: cluster, target: target, original: object, writer: session.writer))
