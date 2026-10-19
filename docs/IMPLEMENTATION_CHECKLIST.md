@@ -99,13 +99,13 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] Rate-limited polling fallback for resources that cannot be watched
       (`PollingResourceWatcher` + per-connection `PollingBudget`, published as
       `DataFreshness.polling` so it is never shown as a live watch)
-- [ ] Pod log streaming: container selection, `previous`, `sinceTime`, `tailLines`,
+- [x] Pod log streaming: container selection, `previous`, `sinceTime`, `tailLines`,
       bounded in-memory buffer
-- [ ] Write operations in their own type, separate from the read client:
-  - [ ] Server-Side Apply with the `tsubame` field manager, dry-run first
-  - [ ] Delete with dry-run where supported
-  - [ ] Restart via the workload pod-template annotation
-  - [ ] Scale via the `scale` subresource
+- [x] Write operations in their own type, separate from the read client:
+  - [x] Server-Side Apply with the `tsubame` field manager, dry-run first
+  - [x] Delete with dry-run where supported
+  - [x] Restart via the workload pod-template annotation
+  - [x] Scale via the `scale` subresource
 - [ ] `SelfSubjectAccessReview` checks for the RBAC preflight screen
 - [ ] Multi-document YAML handling — open decision (PRD §15)
 
@@ -115,19 +115,25 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 - [x] `AppEnvironment` composition root with live and in-memory variants
 - [x] `RootView` adaptive split view
+- [x] Window-local context/resource navigator and resource tabs with independent
+      namespace/search state; only the active tab owns a watcher
 - [x] `NavigationModel` with explicit cluster and namespace selection
 - [x] `FreshnessIndicator`
 - [ ] macOS menu commands and keyboard shortcuts (PRD §10)
 - [ ] Persisted cluster list (connections only; credentials stay in the Keychain)
-- [ ] Scene lifecycle: cancel watches on background, relist and reconnect on resume
+- [x] Scene lifecycle: cancel watches on background, relist and reconnect on resume
 
 ### Clusters
 
 - [x] `KubeconfigDiscovery` protocol with macOS and iOS implementations
 - [x] `ClusterListModel` import and context-selection state
-- [x] `ClusterListView` sidebar with discovered configurations
-- [ ] File import and paste import flows
-- [ ] Context picker that writes the credential and saves the connection
+- [x] In-window connections destination with discovered contexts and separate
+      file/paste sources, plus a persistent context/resource navigator
+- [x] File import and paste import flows
+- [x] Context selection stages an import plan without storing credentials;
+      explicit Connect imports and activates an in-memory connection
+- [x] Changed staged sources invalidate the prior imported-context association;
+      separate sources do not silently merge duplicate context names
 - [ ] Connection test that sends no write request and changes no active context
 - [ ] Namespace picker, including "all namespaces" where permitted
 - [ ] Guided manual setup for iOS and iPadOS
@@ -136,29 +142,32 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 ### Browse
 
-- [ ] Resource list driven by `ResourceWatcher`, with freshness always visible
+- [x] Resource list driven by `ResourceWatcher`, with freshness always visible
+- [x] Adaptive native resource table with kind columns (14.4/17.4+), fixed table
+      fallback at existing OS floors, compact/accessibility rows and on-demand
+      timestamped inspector
 - [ ] Namespace filter and name search that stay usable at 10,000 objects (PRD §18)
 - [ ] Explicit empty, loading, permission-denied, partial, and error states
 - [ ] Resource detail: metadata, status, labels, annotations, owner references
-- [ ] Raw YAML view preserving the API representation
-- [ ] Secret detail decoding text values and leaving binary values as base64
+- [x] Raw YAML view preserving the API representation
+- [x] Secret detail decoding text values and leaving binary values as base64
 - [ ] CRD discovery, schema-driven columns where a usable schema exists, generic fallback
 
 ### Edit and act
 
-- [ ] YAML editor with syntax validation and a draft that survives every failure
-- [ ] Dry-run, server result, and diff before any live apply
-- [ ] Apply as a separate explicit action reusing the dry-run manifest
-- [ ] Field-ownership conflict returns the user to review; never force silently
-- [ ] Delete, restart, and scale confirmations showing cluster, namespace, kind, name
-- [ ] Actions disabled or failing explicitly under insufficient RBAC
+- [x] YAML editor with syntax validation and a draft that survives every failure
+- [x] Dry-run, server result, and diff before any live apply
+- [x] Apply as a separate explicit action reusing the dry-run manifest
+- [x] Field-ownership conflict returns the user to review; never force silently
+- [x] Delete, restart, and scale confirmations showing cluster, namespace, kind, name
+- [x] Actions disabled or failing explicitly under insufficient RBAC
 
 ### Logs
 
-- [ ] Pod and container picker
-- [ ] Live stream with start and stop, bounded buffer, long-line handling
-- [ ] Previous-container logs, timestamps, bounded starting window
-- [ ] Interrupted-versus-current indication, and no log content in diagnostics
+- [x] Pod and container picker
+- [x] Live stream with start and stop, bounded buffer, long-line handling
+- [x] Previous-container logs, timestamps, bounded starting window
+- [x] Interrupted-versus-current indication, and no log content in diagnostics
 
 ### RBAC help
 
@@ -209,3 +218,76 @@ the intended answer differs.
 OIDC issuers and flows · exec-plugin approval and refresh UX · final minimum OS
 versions · Kubernetes version floor · `KUBECONFIG` merge behavior · multi-document
 YAML · distribution channel · license.
+
+## M4 / M5 continuation — 19 October 2026
+
+- `PodLogSession` resumes with the original timestamp, suppresses replayed
+  occurrences, keeps monotonic row IDs, and bounds both lines and UTF-8 bytes.
+  Snapshots are coalesced to ten per second and buffered one deep. The transport
+  also bounds its line queue and reports overflow, closes the socket on
+  cancellation, and retains UTF-8 across forced line breaks.
+- `ResourceWriter` makes rehearsal construction private and binds it to its
+  originating writer/cluster. It re-rehearses before commit and requires another
+  review when the meaningful proposal or warnings changed. Requests never set
+  `force`. Apply sends the validated source bytes directly, retaining numeric
+  spelling such as `1.0`. Delete binds UID and resource-version preconditions;
+  scale binds a resource version. Unsupported dry-run currently blocks a write
+  rather than offering an unchecked fallback.
+- The editor uses a pinned app-only CodeEditorView dependency behind one wrapper,
+  with YAML highlighting and Dynamic Type. Drafts are scoped to cluster and
+  target and kept only in memory. Kept drafts block context changes until the
+  user applies or explicitly discards them.
+- Import, discovery, resource selection and fetched detail now connect the tools
+  end to end. The browse list is a functional starting point, **not** the
+  10,000-object performance implementation in the plan. Namespace entry is manual;
+  all-namespaces selection, namespace discovery, list projection, first-page
+  publication, live detail, complete metadata panes and menu commands remain.
+- Exec and interactive OIDC providers are still not connected to the app's
+  presentation layer. The import screen explicitly says when setup/approval is
+  needed and does not execute plugins. Cluster persistence, credential removal,
+  connection testing, guided mobile setup and the support matrix remain open.
+- M6 (RBAC help and CRD schemas) and M7 (persistence and support matrix) remain.
+  Multi-document YAML, kubeconfig merging, issuer guarantees, OS/Kubernetes
+  floors, distribution and license decisions have not been settled.
+
+### Verification for this continuation
+
+- `swift test --package-path KubeKit`: 127 tests passed in the KubeKit suite;
+  the KubeModels suite also passed (38 tests).
+- macOS app tests: 13 tests passed, including post-apply draft rebasing and
+  foreground log resume across inactive/background transitions.
+- iOS Simulator build: passed at the existing iOS 17 deployment target; macOS
+  remains at 14. The shared plist now merges the generated launch/scene keys,
+  avoiding the legacy letterboxed iOS frame found during simulator inspection.
+- iPhone accessibility/Dark Mode editor and iPad log captures inspected with
+  synthetic data. Focused review scored the draft-baseline and diff-contrast
+  source fixes resolved. Mac tool captures, a full accessibility/keyboard matrix,
+  hardware soak, and real-cluster write/log validation remain unverified.
+
+See [UI_IMPLEMENTATION.md](UI_IMPLEMENTATION.md) for preview instructions and
+presentation conventions. Dependency notices ship in `ThirdPartyNotices.txt`;
+this does not settle the app's open license decision.
+
+## Workspace/connections redesign — 19 October 2026
+
+- Replaced the import-form entry and three-column shell with contexts first,
+  a persistent resource tree, tabs, namespace/search above the resource table,
+  and an inspector that opens on selection. The selected Lens composition is
+  recorded in [WORKSPACE_DESIGN.md](WORKSPACE_DESIGN.md); spaces, metrics and
+  Helm are outside this change.
+- Namespace entry and name search are available per tab. Namespace discovery,
+  all-namespaces selection and the 10,000-object performance requirement remain
+  open. Metadata, labels, annotations and owners are visible in the inspector;
+  full resource-detail/status coverage and the complete error-state matrix are
+  still unchecked above.
+- Debug fixtures now include `--preview-connections` and `--preview-workspace`.
+  Eighteen macOS app tests passed before final presentation-only fixes, and both
+  macOS and iOS Simulator builds passed afterward. The previous 127 KubeKit and
+  38 KubeModels passing results belong to the M4/M5 continuation.
+- Synthetic Mac workspace/tab/inspector/connections and phone/tablet captures,
+  including two phone accessibility-size views, support focused layout review.
+  Mac interactions were exercised; mobile evidence is captures/source only.
+  This does not complete VoiceOver, full keyboard/accessibility, real-cluster,
+  performance, or hardware verification. See UI_IMPLEMENTATION.md for the
+  temporary evidence paths and precise limits.
+- M6/M7 and all PRD-owned open decisions retain their existing status.

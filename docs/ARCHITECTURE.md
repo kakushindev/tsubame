@@ -123,3 +123,59 @@ picks between them. Feature code contains no `#if os(...)`.
 Signing defaults to ad-hoc (`CODE_SIGN_IDENTITY = "-"`, manual style, no profile) so
 the project builds and runs on any Mac with no Apple developer team. Device builds
 and distribution need a real `DEVELOPMENT_TEAM`.
+
+## Logs and deliberate writes
+
+`PodLogSession` owns the bounded in-memory log ring and reconnect cursor. A
+consumer owns its session lifetime; foreground loss and screen dismissal cancel
+it. Neither snapshots nor drafts conform to a persistence interface.
+
+`ResourceWriter` is separate from reads. Its API is `plan` → `rehearse` →
+`commit(WriteRehearsal)`, with no public rehearsal initializer. Each writer is
+bound to one client. Rehearsal stores the immutable live request, and commit first
+compares a fresh dry-run against the reviewed proposal before sending it.
+
+The composition root presents logs, editor and action screens. `ClusterSession`
+provides the per-context client, discovery and writer. Feature async work lives in
+cancellable view tasks or a model-owned task. Context/namespace identities rebuild
+those subtrees, and foreground resume opens a new list/watch. Detail is an
+explicitly timestamped GET snapshot, not a claimed live view.
+
+`EditorDraftStore` lives per window and keeps unfinished YAML only in memory,
+keyed by cluster and target. `YAMLSourceEditor` alone imports CodeEditorView;
+its pre-concurrency import confines the upstream Swift 5 theme annotations to the
+main-actor UI boundary. KubeKit has no editor dependency. The debug-only
+`--preview-editor`, `--preview-logs`, and `--preview-actions` launch fixtures use
+synthetic data and never contact a cluster.
+
+## Workspace and context staging
+
+`WorkspaceView` owns the context/resource navigator, window-local
+`ClusterSession` dictionary, `WorkspaceTabs`, inspector selection and tool
+presentations. A tab identity combines connection ID, API version and resource
+name. Reopening it restores its namespace and search text; it retains neither
+an inactive watcher nor resource payloads. Only the selected tab instantiates
+`ResourceListView` and its cancellable list/watch task. Tab or namespace changes
+replace that subtree and clear the inspector selection; backgrounding removes
+the list and foreground resume starts a new list/watch. The inspector owns an
+explicitly refreshed GET snapshot. Switching to a different connection through
+the navigator, tabs, closing the selected tab or Connect still passes through
+the window's pending-draft guard.
+
+`ClusterListModel` owns read-only context staging, source identity, selection and
+the import plan. Discovered files, manual files and pasted text remain separate
+sources; they are not merged. Discovery and selection do not store credentials
+or contact Kubernetes. Explicit Connect invokes the importer and returns a
+connection for the composition root to activate. An unchanged staged context can
+reuse its imported connection. If the parsed source changes, its saved-context
+association is invalidated; a subsequent Connect creates a new connection while
+already-open sessions keep their original target. Connections and tabs are not
+persisted. Credential deletion and connection removal remain outstanding.
+
+`ClusterConnectionsView` is an in-window destination, with a context table/row
+list, inline paste editor and file picker. Resource browsing uses dynamic native
+table columns on macOS 14.4/iOS 17.4 and later, a fixed summary-column fallback
+at the unchanged macOS 14/iOS 17 floors, and readable rows at compact widths or
+accessibility text sizes. Debug-only `--preview-connections` and
+`--preview-workspace` launch fixtures render these actual views through
+`WorkspacePreview` using a synthetic transport and ephemeral credential store.
