@@ -36,7 +36,9 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
       owned by each kind; `tone` is never a colour alone
 - [x] API discovery payloads (`APIVersions`, `APIGroupList`, `APIResourceList`) and
       the resolved `APIResourceCatalog`
-- [ ] `CustomResourceDefinition` model and the OpenAPI schema subset CRD views need
+- [x] `CustomResourceDefinition` model and the OpenAPI schema subset CRD views
+      need, with `PrinterColumn` evaluating the dotted-field and numeric-index
+      JSONPath subset only — anything else renders empty rather than wrong
 
 ## 2. KubeKit — client layer
 
@@ -106,7 +108,9 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
   - [x] Delete with dry-run where supported
   - [x] Restart via the workload pod-template annotation
   - [x] Scale via the `scale` subresource
-- [ ] `SelfSubjectAccessReview` checks for the RBAC preflight screen
+- [x] `SelfSubjectAccessReview` checks for the RBAC preflight screen, as a
+      three-state `AccessDecision`: `allowed` beside an `evaluationError` is
+      `undetermined`, because a webhook that errored may have failed open
 - [ ] Multi-document YAML handling — open decision (PRD §15)
 
 ## 3. App — features
@@ -151,7 +155,8 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [ ] Resource detail: metadata, status, labels, annotations, owner references
 - [x] Raw YAML view preserving the API representation
 - [x] Secret detail decoding text values and leaving binary values as base64
-- [ ] CRD discovery, schema-driven columns where a usable schema exists, generic fallback
+- [x] CRD discovery, schema-driven columns where a usable schema exists,
+      generic fallback
 
 ### Edit and act
 
@@ -171,9 +176,10 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 ### RBAC help
 
-- [ ] Preflight screen naming the permissions each workflow needs
-- [ ] Copyable least-privilege Role and ClusterRole examples
-- [ ] Says so plainly when a capability check is unavailable or inconclusive
+- [x] Preflight screen naming the permissions each workflow needs
+- [x] Copyable least-privilege Role example, generated from the same
+      attributes the screen checks so policy and checks cannot drift
+- [x] Says so plainly when a capability check is unavailable or inconclusive
 
 ## 4. Later (PRD §8)
 

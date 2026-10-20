@@ -12,6 +12,7 @@ final class ClusterSession: Identifiable {
     let client: KubernetesClient
     let writer: ResourceWriter
     let discovery: any APIDiscovering
+    let access: any AccessReviewing
     var namespaces: [String]
     private(set) var catalog: APIResourceCatalog?
     private(set) var failure: String?
@@ -36,7 +37,9 @@ final class ClusterSession: Identifiable {
         self.connection = connection
         self.client = client
         self.writer = ResourceWriter(client: client)
-        self.discovery = ServerAPIDiscovery(client: client)
+        let discovery = ServerAPIDiscovery(client: client)
+        self.discovery = discovery
+        self.access = SelfSubjectAccessReviewer(client: client, discovery: discovery)
         self.namespaces = [connection.defaultNamespace]
     }
 

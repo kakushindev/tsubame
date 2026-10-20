@@ -93,6 +93,81 @@ public struct ResourceKindRegistry: Sendable {
         )
     }
 
+    /// A binding that renders a custom resource through the columns its own
+    /// definition asks for.
+    ///
+    /// This is what makes a CRD readable without the app knowing anything about
+    /// it. Columns the definition marks as lower priority are detail for a wide
+    /// listing, so only the default ones appear.
+    public func binding(
+        for definition: CustomResourceDefinition, version: String
+    ) -> ResourceKindBinding {
+        let columns = (definition.versions.first { $0.name == version }?.additionalPrinterColumns ?? [])
+            .filter { $0.priority == 0 }
+        guard !columns.isEmpty else {
+            return Self.generic(for: definition.groupVersionKind(version: version))
+        }
+        return ResourceKindBinding(
+            groupVersionKind: definition.groupVersionKind(version: version),
+            defaultResourceName: definition.names.plural,
+            columns: columns.map(\.name),
+            makeWatcher: { client, resource, namespace, options in
+                Self.watcher(
+                    of: GenericResource.self,
+                    summarize: { object in Self.summary(of: object, columns: columns) },
+                    client: client,
+                    resource: resource,
+                    namespace: namespace,
+                    options: options
+                )
+            }
+        )
+    }
+
+    /// Builds a row from the definition's printer columns.
+    ///
+    /// A column named Ready, Status or Phase carries the row's state, because
+    /// that is the convention CRD authors already follow; anything else becomes a
+    /// field. A column whose path does not resolve is left out rather than shown
+    /// as a blank the user has to interpret.
+    static func summary(
+        of object: GenericResource, columns: [PrinterColumn]
+    ) -> ResourceRowSummary {
+        var fields: [ResourceRowSummary.Field] = []
+        var headline: String?
+
+        for column in columns {
+            guard let value = column.value(in: object.raw), !value.isEmpty else { continue }
+            let name = column.name.lowercased()
+            if headline == nil, ["ready", "status", "phase", "state"].contains(name) {
+                headline = value
+            } else {
+                fields.append(.init(label: column.name, value: value))
+            }
+        }
+
+        if object.metadata.deletionTimestamp != nil {
+            return ResourceRowSummary(headline: "Terminating", fields: fields, tone: .terminating)
+        }
+        guard let headline else {
+            return ResourceRowSummary(headline: "—", fields: fields, tone: .normal)
+        }
+        return ResourceRowSummary(headline: headline, fields: fields, tone: tone(forColumnValue: headline))
+    }
+
+    static func tone(forColumnValue value: String) -> ResourceRowSummary.Tone {
+        switch value.lowercased() {
+        case "true", "ready", "running", "active", "succeeded", "healthy", "bound", "available":
+            return .normal
+        case "false", "failed", "error", "unhealthy", "degraded":
+            return .failure
+        case "pending", "progressing", "creating", "reconciling", "unknown":
+            return .pending
+        default:
+            return .attention
+        }
+    }
+
     static func generic(for groupVersionKind: GroupVersionKind) -> ResourceKindBinding {
         ResourceKindBinding(
             groupVersionKind: groupVersionKind,

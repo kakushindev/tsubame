@@ -49,6 +49,7 @@ struct WorkspaceView: View {
     /// than inferred, so the shortcut never closes something they were not
     /// looking at.
     @State private var paneHasFocus = false
+    @State private var permissionsFor: ClusterSession?
     @State private var detailGeneration = UUID()
     @ScaledMetric(relativeTo: .body) private var tabLineHeight = 22.0
     @Environment(\.scenePhase) private var scenePhase
@@ -162,6 +163,16 @@ struct WorkspaceView: View {
             case .logs(let model): LogsView(model: model)
             case .action(let model): ResourceActionView(model: model)
             }
+        }
+        .sheet(item: $permissionsFor) { session in
+            RBACHelpView(
+                model: RBACHelpModel(
+                    cluster: session.connection.displayName,
+                    namespace: session.namespaces.first ?? "default",
+                    reviewer: session.access
+                ),
+                close: { permissionsFor = nil }
+            )
         }
         .alert("Unsaved YAML drafts", isPresented: $showDraftGuard) {
             Button("Keep Editing", role: .cancel) { pending = nil }
@@ -343,6 +354,9 @@ struct WorkspaceView: View {
         Divider()
         if let id = contextID ?? connection.flatMap({ clusters.contextID(forConnection: $0.id) }) {
             Button("Show Cluster Settings…") { showSettings(forContext: id) }
+        }
+        if let connected {
+            Button("Permissions…") { permissionsFor = connected }
         }
     }
 
