@@ -51,14 +51,9 @@ final class AppEnvironment {
         #endif
     }
 
-    /// Client certificates need the keychain-backed identity store, which is macOS
-    /// only in this release (PRD §9.1).
+    /// Each platform imports identities into its own protected Keychain.
     static var platformClientIdentities: (any ClientIdentityProviding & ClientIdentityImporting)? {
-        #if os(macOS)
         ClientIdentityStore()
-        #else
-        nil
-        #endif
     }
 
     /// iOS and iPadOS have no process to run, so there is nothing to return and the

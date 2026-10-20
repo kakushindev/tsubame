@@ -16,6 +16,7 @@ final class ClusterSession: Identifiable {
     var namespaces: [String]
     private(set) var catalog: APIResourceCatalog?
     private(set) var failure: String?
+    private let timeout: TimeInterval
 
     /// How this context is doing, as the navigator needs to show it.
     ///
@@ -33,9 +34,10 @@ final class ClusterSession: Identifiable {
         return catalog == nil ? .connecting : .ready
     }
 
-    init(connection: ClusterConnection, client: KubernetesClient) {
+    init(connection: ClusterConnection, client: KubernetesClient, discoveryTimeout: TimeInterval = ClusterSession.discoveryTimeout) {
         self.connection = connection
         self.client = client
+        self.timeout = discoveryTimeout
         self.writer = ResourceWriter(client: client)
         let discovery = ServerAPIDiscovery(client: client)
         self.discovery = discovery
@@ -53,22 +55,28 @@ final class ClusterSession: Identifiable {
     func discover() async {
         do {
             let discovery = self.discovery
-            let result = try await withTaskCancellationHandler {
-                try await Self.withTimeout(seconds: Self.discoveryTimeout) {
+            let result = try await Self.withTimeout(seconds: timeout) {
+                // The deadline cancels this child, not the caller of discover().
+                // Forward that cancellation to the shared discovery task before
+                // the task group waits for its children to finish.
+                try await withTaskCancellationHandler {
                     try await discovery.catalog()
+                } onCancel: {
+                    Task { await discovery.invalidate() }
                 }
-            } onCancel: {
-                Task { await discovery.invalidate() }
             }
             try Task.checkCancellation()
             catalog = result
             failure = nil
-        } catch is CancellationError { }
+        } catch is CancellationError {
+            guard !Task.isCancelled else { return }
+            failure = "The connection ended before API discovery completed. Try again."
+        }
         catch {
             // Stop the sweep that is still running against a cluster nobody is
             // waiting for any more.
-            let discovery = self.discovery
-            Task { await discovery.invalidate() }
+            await discovery.invalidate()
+            guard !Task.isCancelled else { return }
             failure = error.localizedDescription
         }
     }
@@ -79,6 +87,7 @@ final class ClusterSession: Identifiable {
         _ work: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
+            defer { group.cancelAll() }
             group.addTask { try await work() }
             group.addTask {
                 try await Task.sleep(for: .seconds(seconds))
@@ -89,7 +98,6 @@ final class ClusterSession: Identifiable {
             guard let result = try await group.next() else {
                 throw CancellationError()
             }
-            group.cancelAll()
             return result
         }
     }

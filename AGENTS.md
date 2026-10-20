@@ -58,7 +58,7 @@ Signing is ad-hoc by default, so these commands need no Apple developer team.
 
 **Platform differences in auth**
 - macOS: auto-discovers `~/.kube/config` (manual import stays equally visible). Supports bearer token, client certs, supported OIDC, and kubeconfig exec credential plugins. Plugins run only after explaining the command and getting explicit user approval.
-- iOS/iPadOS: bearer token and supported OIDC flows only. No exec plugins and no local `kubectl`. Never imply otherwise in the UI. Watches and logs are foreground-only, with relist and reconnect on resume.
+- iOS/iPadOS: bearer token, imported client certificates, and supported OIDC flows. Client-certificate support was confirmed on 20 October 2026; unencrypted RSA and P-256/P-384/P-521 identities stay in the device Keychain. No exec plugins and no local `kubectl`. Never imply otherwise in the UI. Watches and logs are foreground-only, with relist and reconnect on resume.
 - Namespace defaults to `default` per context.
 
 ## Scope sequencing

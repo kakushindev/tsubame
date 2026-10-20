@@ -1,154 +1,277 @@
-#if os(macOS)
 import CryptoKit
 import Foundation
 import KubeKit
 import KubeModels
 import Security
 
-/// Stores client certificates and hands back the identity for a TLS handshake.
-///
-/// macOS only. Client-certificate authentication is a desktop capability in this
-/// release (PRD §9.1), and the importer this depends on is itself macOS-only.
-///
-/// Three things here are not obvious, and each one fails silently if skipped:
-///
-/// 1. The platform's PEM importer accepts RSA PKCS#1, RSA PKCS#8 and EC SEC1, but
-///    refuses an EC key in PKCS#8. `PrivateKeyPEM` converts that case first.
-/// 2. A certificate and a key are linked in the keychain by the key's public-key
-///    hash, stored as `kSecAttrApplicationLabel`. Without it both items store
-///    successfully and no identity can ever be formed from them.
-/// 3. Re-importing the same certificate reports a duplicate. That is the expected
-///    outcome of importing a kubeconfig twice, not a failure.
+/// Imports kubeconfig identities into platform-protected storage. iOS uses
+/// SecKeyCreateWithData; macOS keeps its native PEM importer. Reference records
+/// are also in the Keychain, so contexts may share an identity without deleting
+/// one another's credentials when they disconnect.
 public actor ClientIdentityStore: ClientIdentityProviding, ClientIdentityImporting {
     private let service: String
+
+    private struct IdentityRecord: Codable {
+        let publicKeyHash: Data
+        let certificates: [Data]
+
+        var certificateHash: String { Data(SHA256.hash(data: certificates[0])).base64EncodedString() }
+        var keyHash: String { publicKeyHash.base64EncodedString() }
+    }
 
     public init(service: String = "dev.kakushin.tsubame.client-identities") {
         self.service = service
     }
 
-    // MARK: - Importing
-
     public func importIdentity(
-        certificatePEM: Data,
-        privateKeyPEM: Data,
-        for reference: CredentialReference
+        certificatePEM: Data, privateKeyPEM: Data, for reference: CredentialReference
     ) async throws {
-        let keyText = String(decoding: privateKeyPEM, as: UTF8.self)
-        let importable = try PrivateKeyPEM.importable(keyText)
-
-        let key = try privateKey(fromPEM: Data(importable.utf8))
-        let certificate = try certificate(fromPEM: certificatePEM)
-
+        let key = try Self.privateKey(fromPEM: privateKeyPEM)
+        let certificates = try Self.certificates(fromPEM: certificatePEM)
         guard let publicKey = SecKeyCopyPublicKey(key),
-              let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data?
-        else {
-            throw KeychainError(status: errSecInvalidKeyRef, operation: .write)
+              let keyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data?,
+              let certificateKey = SecCertificateCopyKey(certificates[0]),
+              let certificateKeyData = SecKeyCopyExternalRepresentation(certificateKey, nil) as Data?,
+              keyData == certificateKeyData else {
+            throw KubernetesError.invalidConfiguration(
+                reason: "The client certificate and private key do not match."
+            )
         }
-        let publicKeyHash = Data(Insecure.SHA1.hash(data: publicKeyData))
-
-        // Replace rather than accumulate: importing the same context twice should
-        // leave one identity, not two.
-        try deleteItems(for: reference)
-
-        let keyStatus = SecItemAdd([
-            kSecClass: kSecClassKey,
-            kSecValueRef: key,
-            // The linkage. Without it `SecIdentityCreateWithCertificate` never
-            // matches, however well the two items store.
-            kSecAttrApplicationLabel: publicKeyHash,
-            kSecAttrLabel: label(for: reference),
-        ] as CFDictionary, nil)
-        guard keyStatus == errSecSuccess || keyStatus == errSecDuplicateItem else {
-            throw KeychainError(status: keyStatus, operation: .write)
+        let record = IdentityRecord(
+            publicKeyHash: Data(Insecure.SHA1.hash(data: keyData)),
+            certificates: certificates.map { SecCertificateCopyData($0) as Data }
+        )
+        let previous = try readRecord(for: reference)
+        do {
+            try add([
+                kSecClass: kSecClassKey, kSecValueRef: key,
+                kSecAttrApplicationLabel: record.publicKeyHash,
+                kSecAttrLabel: keyLabel(record),
+                kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ])
+            try add([
+                kSecClass: kSecClassCertificate, kSecValueRef: certificates[0],
+                kSecAttrLabel: certificateLabel(record),
+                kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ])
+            guard try identity(for: record) != nil else {
+                throw KubernetesError.invalidConfiguration(
+                    reason: "The client certificate could not be linked to its private key in the Keychain."
+                )
+            }
+            try saveRecord(record, for: reference)
+        } catch {
+            try? removeUnreferencedItems(record)
+            throw error
         }
-
-        let certificateStatus = SecItemAdd([
-            kSecClass: kSecClassCertificate,
-            kSecValueRef: certificate,
-            kSecAttrLabel: label(for: reference),
-        ] as CFDictionary, nil)
-        guard certificateStatus == errSecSuccess || certificateStatus == errSecDuplicateItem else {
-            throw KeychainError(status: certificateStatus, operation: .write)
-        }
+        if let previous { try? removeUnreferencedItems(previous) }
     }
-
-    // MARK: - Reading
 
     public func credential(for reference: CredentialReference) async throws -> URLCredential? {
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching([
-            kSecClass: kSecClassIdentity,
-            kSecAttrLabel: label(for: reference),
-            kSecReturnRef: true,
-        ] as CFDictionary, &result)
-
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let found = result else {
-            throw KeychainError(status: status, operation: .read)
+        if let record = try readRecord(for: reference) {
+            guard let identity = try identity(for: record) else { return nil }
+            let certificates = record.certificates.compactMap { SecCertificateCreateWithData(nil, $0 as CFData) }
+            return URLCredential(identity: identity, certificates: certificates, persistence: .forSession)
         }
-        guard CFGetTypeID(found) == SecIdentityGetTypeID() else { return nil }
-        // `.forSession` on purpose: the identity is already persisted in the
-        // keychain, and URLSession should not keep a second copy of its own.
-        return URLCredential(
-            identity: found as! SecIdentity,
-            certificates: nil,
-            persistence: .forSession
-        )
+        // Identities imported by earlier macOS builds used the context label.
+        var result: CFTypeRef?
+        let label = legacyLabel(reference)
+        let status = SecItemCopyMatching([
+            kSecClass: kSecClassCertificate, kSecAttrLabel: label,
+            kSecReturnRef: true, kSecReturnAttributes: true,
+        ] as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainError(status: status, operation: .read) }
+        guard let attributes = result as? [String: Any],
+              attributes[kSecAttrLabel as String] as? String == label,
+              let certificate = attributes[kSecValueRef as String],
+              CFGetTypeID(certificate as CFTypeRef) == SecCertificateGetTypeID() else { return nil }
+        let cert = certificate as! SecCertificate
+        guard let key = SecCertificateCopyKey(cert),
+              let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data? else { return nil }
+        let legacy = IdentityRecord(publicKeyHash: Data(Insecure.SHA1.hash(data: keyData)), certificates: [SecCertificateCopyData(cert) as Data])
+        guard let identity = try identity(for: legacy) else { return nil }
+        return URLCredential(identity: identity, certificates: nil, persistence: .forSession)
     }
-
-    // MARK: - Removal
 
     public func removeIdentity(for reference: CredentialReference) async throws {
-        try deleteItems(for: reference)
-    }
-
-    private func deleteItems(for reference: CredentialReference) throws {
-        for itemClass in [kSecClassIdentity, kSecClassCertificate, kSecClassKey] {
-            let status = SecItemDelete([
-                kSecClass: itemClass,
-                kSecAttrLabel: label(for: reference),
-            ] as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else {
-                throw KeychainError(status: status, operation: .delete)
+        if let record = try readRecord(for: reference) {
+            try delete(referenceQuery(reference))
+            try removeUnreferencedItems(record)
+        } else {
+            // An identity is formed from its certificate and key. Deleting those
+            // exact labelled items also avoids legacy macOS identity queries,
+            // whose label filtering is not reliable.
+            for itemClass in [kSecClassCertificate, kSecClassKey] {
+                try delete([kSecClass: itemClass, kSecAttrLabel: legacyLabel(reference)])
             }
         }
     }
 
-    // MARK: - Decoding PEM
-
-    private func privateKey(fromPEM pem: Data) throws -> SecKey {
-        let item = try firstImportedItem(from: pem, expecting: SecKeyGetTypeID())
-        return item as! SecKey
+    /// Security's native key representation, also exercised on macOS in tests so
+    /// the mobile parser is covered independently of a simulator's Keychain.
+    static func mobilePrivateKey(fromPEM pem: Data) throws -> SecKey {
+        let text = String(decoding: pem, as: UTF8.self)
+        guard let format = PrivateKeyPEM.format(of: text), format != .encrypted,
+              !text.contains("Proc-Type: 4,ENCRYPTED") else {
+            throw KubernetesError.invalidConfiguration(
+                reason: "Use an unencrypted RSA or P-256, P-384, or P-521 client key in PEM format."
+            )
+        }
+        guard let der = PrivateKeyPEM.body(of: text) else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key is not valid base64.")
+        }
+        let data: Data
+        let keyType: CFString
+        if format == .rsaPKCS1 {
+            data = try PrivateKeyPEM.rsaPKCS1DER(text)
+            keyType = kSecAttrKeyTypeRSA
+        } else if let key = try? P256.Signing.PrivateKey(derRepresentation: der) {
+            data = key.x963Representation; keyType = kSecAttrKeyTypeECSECPrimeRandom
+        } else if let key = try? P384.Signing.PrivateKey(derRepresentation: der) {
+            data = key.x963Representation; keyType = kSecAttrKeyTypeECSECPrimeRandom
+        } else if let key = try? P521.Signing.PrivateKey(derRepresentation: der) {
+            data = key.x963Representation; keyType = kSecAttrKeyTypeECSECPrimeRandom
+        } else {
+            data = try PrivateKeyPEM.rsaPKCS1DER(text)
+            keyType = kSecAttrKeyTypeRSA
+        }
+        guard let key = SecKeyCreateWithData(data as CFData, [
+            kSecAttrKeyType: keyType, kSecAttrKeyClass: kSecAttrKeyClassPrivate,
+        ] as CFDictionary, nil) else {
+            throw KubernetesError.invalidConfiguration(reason: "The client private key could not be imported.")
+        }
+        return key
     }
 
-    private func certificate(fromPEM pem: Data) throws -> SecCertificate {
-        let item = try firstImportedItem(from: pem, expecting: SecCertificateGetTypeID())
-        return item as! SecCertificate
-    }
-
-    /// Imports PEM into memory. Nothing is written to a keychain here, so a
-    /// malformed file is rejected before anything is stored.
-    private func firstImportedItem(from pem: Data, expecting type: CFTypeID) throws -> AnyObject {
+    private static func privateKey(fromPEM pem: Data) throws -> SecKey {
+        #if os(macOS)
+        let importable = try PrivateKeyPEM.importable(String(decoding: pem, as: UTF8.self))
         var format = SecExternalFormat.formatUnknown
         var itemType = SecExternalItemType.itemTypeUnknown
         var items: CFArray?
         var parameters = SecItemImportExportKeyParameters()
-
         let status = SecItemImport(
-            pem as CFData, nil, &format, &itemType,
+            Data(importable.utf8) as CFData, nil, &format, &itemType,
             SecItemImportExportFlags(rawValue: 0), &parameters, nil, &items
         )
-        guard status == errSecSuccess else {
-            throw KeychainError(status: status, operation: .write)
-        }
-        guard let found = (items as? [AnyObject])?.first(where: { CFGetTypeID($0) == type }) else {
+        guard status == errSecSuccess else { throw KeychainError(status: status, operation: .write) }
+        guard let found = (items as? [AnyObject])?.first(where: { CFGetTypeID($0) == SecKeyGetTypeID() }) else {
             throw KeychainError(status: errSecUnknownFormat, operation: .write)
         }
-        return found
+        return found as! SecKey
+        #else
+        return try mobilePrivateKey(fromPEM: pem)
+        #endif
     }
 
-    private func label(for reference: CredentialReference) -> String {
-        "\(service).\(reference.account)"
+    private static func certificates(fromPEM pem: Data) throws -> [SecCertificate] {
+        let text = String(decoding: pem, as: UTF8.self)
+        let blocks = text.components(separatedBy: "-----BEGIN CERTIFICATE-----").dropFirst()
+        let certificates = blocks.compactMap { block -> SecCertificate? in
+            guard let end = block.range(of: "-----END CERTIFICATE-----"),
+                  let der = Data(base64Encoded: String(block[..<end.lowerBound]), options: .ignoreUnknownCharacters) else { return nil }
+            return SecCertificateCreateWithData(nil, der as CFData)
+        }
+        guard !certificates.isEmpty, certificates.count == blocks.count else {
+            throw KubernetesError.invalidConfiguration(reason: "The client certificate is not valid PEM.")
+        }
+        return certificates
     }
+
+    private func identity(for record: IdentityRecord) throws -> SecIdentity? {
+        #if os(macOS)
+        guard let certificate = SecCertificateCreateWithData(nil, record.certificates[0] as CFData) else { return nil }
+        var identity: SecIdentity?
+        let status = SecIdentityCreateWithCertificate(nil, certificate, &identity)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainError(status: status, operation: .read) }
+        return identity
+        #else
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecClass: kSecClassIdentity, kSecAttrLabel: certificateLabel(record),
+            kSecReturnRef: true, kSecMatchLimit: kSecMatchLimitOne,
+        ] as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else {
+            throw KubernetesError.invalidConfiguration(reason: "The Keychain could not read the client identity (OSStatus \(status)).")
+        }
+        guard let result, CFGetTypeID(result) == SecIdentityGetTypeID() else { return nil }
+        let identity = result as! SecIdentity
+        var certificate: SecCertificate?
+        guard SecIdentityCopyCertificate(identity, &certificate) == errSecSuccess,
+              let certificate, SecCertificateCopyData(certificate) as Data == record.certificates[0] else { return nil }
+        return identity
+        #endif
+    }
+
+    private func referenceQuery(_ reference: CredentialReference) -> [CFString: Any] {
+        [kSecClass: kSecClassGenericPassword, kSecAttrService: service + ".references", kSecAttrAccount: reference.account]
+    }
+
+    private func readRecord(for reference: CredentialReference) throws -> IdentityRecord? {
+        var query = referenceQuery(reference)
+        query[kSecReturnData] = true
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw KeychainError(status: status, operation: .read) }
+        guard let data = result as? Data, let record = try? JSONDecoder().decode(IdentityRecord.self, from: data),
+              !record.certificates.isEmpty else {
+            throw KubernetesError.invalidConfiguration(reason: "The stored client identity is invalid. Import the kubeconfig again.")
+        }
+        return record
+    }
+
+    private func saveRecord(_ record: IdentityRecord, for reference: CredentialReference) throws {
+        let data = try JSONEncoder().encode(record)
+        let query = referenceQuery(reference)
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+        if status == errSecSuccess { return }
+        guard status == errSecItemNotFound else { throw KeychainError(status: status, operation: .write) }
+        var attributes = query
+        attributes[kSecValueData] = data
+        attributes[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        try add(attributes)
+    }
+
+    private func removeUnreferencedItems(_ record: IdentityRecord) throws {
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching([
+            kSecClass: kSecClassGenericPassword, kSecAttrService: service + ".references",
+            kSecMatchLimit: kSecMatchLimitAll, kSecReturnAttributes: true,
+        ] as CFDictionary, &result)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError(status: status, operation: .read)
+        }
+        let accounts = ((result as? [[String: Any]]) ?? []).compactMap { $0[kSecAttrAccount as String] as? String }
+        let references = try accounts.compactMap {
+            try readRecord(for: CredentialReference(account: $0))
+        }
+        if !references.contains(where: { $0.certificateHash == record.certificateHash }) {
+            try delete([kSecClass: kSecClassCertificate, kSecAttrLabel: certificateLabel(record)])
+        }
+        if !references.contains(where: { $0.keyHash == record.keyHash }) {
+            try delete([kSecClass: kSecClassKey, kSecAttrLabel: keyLabel(record)])
+        }
+    }
+
+    private func add(_ attributes: [CFString: Any]) throws {
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        guard status == errSecSuccess || status == errSecDuplicateItem else {
+            throw KeychainError(status: status, operation: .write)
+        }
+    }
+
+    private func delete(_ query: [CFString: Any]) throws {
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError(status: status, operation: .delete)
+        }
+    }
+
+    private func legacyLabel(_ reference: CredentialReference) -> String { "\(service).\(reference.account)" }
+    private func keyLabel(_ record: IdentityRecord) -> String { "\(service).key.\(record.keyHash)" }
+    private func certificateLabel(_ record: IdentityRecord) -> String { "\(service).certificate.\(record.certificateHash)" }
 }
-#endif

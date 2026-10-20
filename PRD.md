@@ -124,7 +124,7 @@ Phases are capability groupings, not committed dates. The first implementation s
 - The selected namespace defaults to `default` for each context; users can choose another namespace or all namespaces when permitted.
 - The app tests connectivity and identifies common failures: invalid configuration, DNS/network failure, TLS trust failure, expired/invalid credential, authorization denial, and unsupported authentication method.
 - macOS supports bearer tokens, client certificates, supported OIDC flows, and kubeconfig exec credential plugins where the executable is installed. The app explains and asks before it first runs a plugin command imported from kubeconfig.
-- iOS/iPadOS support imported bearer tokens and supported OIDC sign-in/refresh flows. Executable credential plugins and local `kubectl` are unsupported. Client-certificate import on mobile is deferred unless a real target cluster requires it.
+- iOS/iPadOS support imported bearer tokens, client certificates, and supported OIDC sign-in/refresh flows. Client-certificate import accepts unencrypted RSA PKCS#1/PKCS#8 and EC SEC1/PKCS#8 keys for P-256, P-384, and P-521, with identities kept in the device Keychain. Executable credential plugins and local `kubectl` are unsupported. Mobile client-certificate support was confirmed on 20 October 2026.
 - The OIDC support matrix must name working issuers/flows and required setup fields; the presence of an OIDC-related kubeconfig entry alone does not guarantee a usable mobile sign-in flow.
 - Imported credentials are stored using platform-protected storage. Users can remove a cluster and its stored credentials.
 - The app never silently changes the active context or sends a write request as part of connection testing.
@@ -142,6 +142,7 @@ Phases are capability groupings, not committed dates. The first implementation s
 ### 9.3 Live updates
 
 - The client uses Kubernetes list/watch patterns and resource versions to maintain current lists.
+- Opened object details, including metadata and raw YAML, follow live changes too; a live update must not overwrite an unsaved editor draft.
 - Watches reconnect after interruption and recover from expired resource versions using a fresh list.
 - UI indicates last update time and when information may be stale.
 - Duplicate events, cancellation, backgrounding, and rapid navigation must not create unbounded tasks or memory growth.
@@ -204,7 +205,7 @@ Use the current Xcode and SDK to adopt Liquid Glass through standard SwiftUI nav
 ### iOS
 
 - Fast context and namespace selection, resource browsing, detail inspection, foreground log viewing, and deliberate resource actions.
-- Manual cluster import/setup with bearer token or a supported OIDC flow.
+- Manual cluster import/setup with bearer token, client certificate, or a supported OIDC flow.
 - Clear connectivity status and recovery when suspended or network changes.
 - Watches and logs are foreground sessions; relist and reconnect on resume. Continuous background monitoring is outside scope.
 - Do not imply support for local executable auth plugins.
@@ -280,7 +281,7 @@ Avoid collecting cluster names, resource content, logs, or credentials for produ
 
 - Kakushin.dev publishes Tsubame as a free, public, open-source app under bundle identifier `dev.kakushin.tsubame`.
 - macOS automatically discovers `~/.kube/config`; all platforms offer manual import, and mobile also offers guided setup.
-- macOS has the broadest authentication support. iOS/iPadOS launch support is bearer token plus supported OIDC flows.
+- macOS has the broadest authentication support. iOS/iPadOS launch support includes bearer tokens, client certificates, and supported OIDC flows.
 - YAML changes use server-side dry-run, review, then a separate live apply action.
 - Delete, restart, and scale are expected in the initial product.
 - Kubernetes Secret objects and values appear as-is for authorized users; logs and YAML are not masked while browsing.

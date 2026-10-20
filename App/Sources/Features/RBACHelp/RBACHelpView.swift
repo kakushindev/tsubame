@@ -15,7 +15,7 @@ struct RBACHelpView: View {
                     LabeledContent("Cluster", value: model.cluster)
                     LabeledContent("Namespace", value: model.namespace)
                 } footer: {
-                    Text("Checked for the account this context authenticates as.")
+                    Text("Checked for the account used to connect to this cluster.")
                 }
 
                 if let inconclusive = model.inconclusive {

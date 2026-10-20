@@ -85,6 +85,12 @@ private actor WorkspacePreviewTransport: KubernetesTransport {
         default:
             if let body = request.body, let value = try? ManifestParser().parse(String(decoding: body, as: UTF8.self)) {
                 result = value
+            } else if request.path == "/api/v1/namespaces" {
+                let names = ["default", "development", "kube-system", "staging"]
+                    + (1...40).map { String(format: "team-%02d", $0) }
+                result = .object(["apiVersion": .string("v1"), "kind": .string("NamespaceList"),
+                                  "metadata": .object(["resourceVersion": .string("42")]),
+                                  "items": .array(names.map { .object(["metadata": .object(["name": .string($0)])]) })])
             } else if request.path.hasSuffix("/pods") {
                 result = .object(["apiVersion": .string("v1"), "kind": .string("PodList"),
                                   "metadata": .object(["resourceVersion": .string("42")]), "items": .array(Self.pods)])

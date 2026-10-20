@@ -59,12 +59,12 @@ public struct KubeconfigImportPlan: Hashable, Sendable {
                 return "This cluster lists both an inline certificate authority and a file, "
                     + "and they differ. The inline data is used."
             case .deprecatedAuthProvider(let name):
-                return "This context uses the deprecated auth-provider \"\(name)\"."
+                return "This cluster uses the deprecated auth-provider \"\(name)\"."
             case .proxyUnsupportedOnPlatform(let proxy, let platform):
                 return "This cluster is reached through \(proxy), which "
                     + "\(platform == .macOS ? "macOS" : "iOS and iPadOS") cannot apply."
             case .basicAuthenticationIgnored:
-                return "This context uses a username and password. Kubernetes removed basic "
+                return "This cluster uses a username and password. Kubernetes removed basic "
                     + "authentication, and Tsubame does not support it."
             }
         }

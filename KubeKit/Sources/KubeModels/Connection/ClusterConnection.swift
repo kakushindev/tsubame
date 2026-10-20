@@ -59,11 +59,9 @@ public enum AuthenticationMethod: Hashable, Sendable, Codable {
 
     public func isSupported(on platform: HostPlatform) -> Bool {
         switch self {
-        case .bearerToken, .oidc:
+        case .bearerToken, .oidc, .clientCertificate:
             return true
         case .tokenFile:
-            return platform == .macOS
-        case .clientCertificate:
             return platform == .macOS
         case .execPlugin:
             return platform == .macOS

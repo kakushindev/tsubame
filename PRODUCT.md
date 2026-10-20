@@ -38,7 +38,7 @@ Lower memory, CPU, or battery use is **an unproven hypothesis, not a claim**. Do
 ## Operating Context
 
 - Users connect from a kubeconfig. macOS finds `~/.kube/config` automatically, file and paste import are available on every platform, and iOS/iPadOS also offer guided manual setup.
-- Auth: macOS supports bearer token, client certificates, supported OIDC, and kubeconfig exec credential plugins (each runs only after the user approves it). iOS/iPadOS support bearer token and supported OIDC only, with no exec plugins and no local `kubectl`.
+- Auth: macOS supports bearer token, client certificates, supported OIDC, and kubeconfig exec credential plugins (each runs only after the user approves it). iOS/iPadOS support bearer token, client certificates, and supported OIDC, with no exec plugins and no local `kubectl`.
 - On mobile, watches and logs run only in the foreground. The app relists and reconnects on resume. Continuous background monitoring is out of scope.
 - Users may be on call, away from their desk, on unreliable networks.
 - Freelens is the category reference and the coverage checklist, not a parity target.

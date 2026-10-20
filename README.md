@@ -102,7 +102,7 @@ for YAML.
 - **Platform auth differs.** macOS discovers `~/.kube/config`, and supports bearer
   tokens, client certificates, supported OIDC, and kubeconfig exec plugins — the
   latter only after explaining the command and getting explicit approval.
-  iOS/iPadOS support bearer tokens and supported OIDC only, with no exec plugins and
+  iOS/iPadOS support bearer tokens, client certificates and supported OIDC, with no exec plugins and
   no local `kubectl`, and watches and logs run in the foreground only.
 
 ## Documentation

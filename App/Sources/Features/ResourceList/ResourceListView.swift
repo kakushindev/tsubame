@@ -62,6 +62,11 @@ struct ResourceListView: View {
             .background(.bar)
         }
         .navigationTitle(ResourceKindPresentation.name(resource))
+        #if os(iOS)
+        // A large navigation title follows the first nested scroll view. The
+        // namespace popover must never drag the workspace heading into the table.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { await model.run() }
         .onChange(of: model.search) { _, value in searchChanged(value) }
         .onChange(of: selection) { _, id in didSelect(model.rows.first { $0.id == id }) }

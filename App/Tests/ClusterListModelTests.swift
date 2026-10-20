@@ -137,7 +137,7 @@ struct ClusterListModelTests {
             Issue.record("Expected failed, got \(model.importState)")
             return
         }
-        #expect(message.contains("no contexts"))
+        #expect(message.contains("no cluster connections"))
     }
 }
 

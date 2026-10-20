@@ -128,7 +128,7 @@ private struct PaneTab: View {
                 .font(.caption.weight(isSelected ? .semibold : .regular))
             Text(tool.subject)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 160, alignment: .leading)
@@ -139,7 +139,7 @@ private struct PaneTab: View {
                     .padding(2)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             // Always present for touch and VoiceOver; hover only changes emphasis,
             // so the control never depends on a pointer.
             .opacity(isHovering || isSelected ? 1 : 0.55)
@@ -147,9 +147,10 @@ private struct PaneTab: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
+        .foregroundStyle(Color.primary)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(isSelected ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear))
+                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.clear)
         )
         .contentShape(.rect)
         .onTapGesture(perform: select)

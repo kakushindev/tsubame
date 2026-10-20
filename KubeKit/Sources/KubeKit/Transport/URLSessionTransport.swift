@@ -221,9 +221,10 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
     /// cluster did. `URLSession` reports cancellation as a `URLError`, so without
     /// this a closed view would surface as a network failure and be rendered as one.
     static func isCancellation(_ error: any Error) -> Bool {
-        if error is CancellationError { return true }
-        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
-        return false
+        // URLSession can cancel a request after a rejected authentication
+        // challenge too. Only suppress it when our owning task was cancelled;
+        // otherwise it is a connection failure the user needs to see.
+        Task.isCancelled
     }
 
     private func mapped(_ error: any Error) -> KubernetesError {
@@ -232,13 +233,18 @@ public final class URLSessionTransport: NSObject, KubernetesTransport, @unchecke
             return .networkUnreachable(underlying: message)
         }
         switch urlError.code {
+        case .cancelled, .userCancelledAuthentication:
+            return .networkUnreachable(
+                underlying: "The connection ended before a response. Check the cluster's "
+                    + "certificate authority and client credentials, then try again."
+            )
         case .clientCertificateRejected, .clientCertificateRequired:
             // The server's certificate is not the problem here: the cluster asked
             // this app for a certificate it could not present. Reporting it as a
             // trust failure sends the user to check the wrong end of the handshake.
             return .invalidConfiguration(
                 reason: "This cluster requires a client certificate that could not be "
-                    + "presented. Import the context again, or check that its "
+                    + "presented. Import the cluster again, or check that its "
                     + "certificate and key are still in the kubeconfig. (\(message))"
             )
         case .serverCertificateUntrusted,

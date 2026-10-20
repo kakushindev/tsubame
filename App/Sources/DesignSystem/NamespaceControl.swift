@@ -78,14 +78,16 @@ struct NamespaceControl: View {
         )
         // Below the control, not above it: the toolbar sits near the top of the
         // window, so opening upward covered the tab strip the user was just in.
-        .popover(isPresented: $showing, arrowEdge: .bottom) {
+        .popover(isPresented: $showing, arrowEdge: .top) {
             content
                 .frame(width: 280)
                 .task(id: showing) {
                     guard showing else { return }
                     // Only the very first open has nothing to show.
                     options = cached ?? .loading
+                    #if os(macOS)
                     searchFocused = true
+                    #endif
                     guard let refresh else { return }
                     let latest = await refresh()
                     guard !Task.isCancelled else { return }

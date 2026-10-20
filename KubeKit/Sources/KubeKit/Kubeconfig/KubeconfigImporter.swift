@@ -43,12 +43,12 @@ public struct KubeconfigImporter: Sendable {
     ) throws -> KubeconfigImportPlan {
         guard let context = kubeconfig.context(named: name) else {
             throw KubernetesError.invalidConfiguration(
-                reason: "This kubeconfig has no context named \"\(name)\"."
+                reason: "This kubeconfig has no cluster connection named \"\(name)\"."
             )
         }
         guard let cluster = kubeconfig.cluster(named: context.cluster) else {
             throw KubernetesError.invalidConfiguration(
-                reason: "The context \"\(name)\" names the cluster \"\(context.cluster)\", "
+                reason: "The cluster connection \"\(name)\" names the cluster \"\(context.cluster)\", "
                     + "which this kubeconfig does not define."
             )
         }
@@ -161,7 +161,7 @@ public struct KubeconfigImporter: Sendable {
             return (.bearerToken, .unsupported(
                 method: "None",
                 platform: platform,
-                reason: "The context names the user \"\(userName)\", which this kubeconfig "
+                reason: "The cluster connection names the user \"\(userName)\", which this kubeconfig "
                     + "does not define, so there is no credential to use."
             ))
         }
@@ -192,7 +192,7 @@ public struct KubeconfigImporter: Sendable {
             warnings.append(.deprecatedAuthProvider(name: provider.name))
             if let method = oidcMethod(from: provider) {
                 return (method, .needsSetup(
-                    reason: "This context signs in through \(provider.name). Confirm the "
+                    reason: "This cluster signs in through \(provider.name). Confirm the "
                         + "issuer, client ID and redirect URI before connecting."
                 ))
             }
@@ -206,14 +206,6 @@ public struct KubeconfigImporter: Sendable {
 
         if user.clientCertificateData != nil || user.clientCertificate != nil {
             let method = AuthenticationMethod.clientCertificate
-            guard method.isSupported(on: platform) else {
-                return (method, .unsupported(
-                    method: "Client certificate",
-                    platform: platform,
-                    reason: "Client-certificate authentication is macOS-only in this release. "
-                        + "Use a bearer token or OIDC on iOS and iPadOS."
-                ))
-            }
             if let path = user.clientCertificate,
                let url = try? LocalKubeconfigFileReader.resolve(
                    path: path, relativeTo: sourceDirectory
@@ -382,7 +374,7 @@ public struct KubeconfigImporter: Sendable {
         }
         guard let user = kubeconfig.user(named: plan.credentialUser) else {
             throw KubernetesError.invalidConfiguration(
-                reason: "The context's user entry is missing, so there is no certificate to import."
+                reason: "The cluster connection's user entry is missing, so there is no certificate to import."
             )
         }
         let certificate = try pemMaterial(
@@ -414,7 +406,7 @@ public struct KubeconfigImporter: Sendable {
         if let inline {
             guard let decoded = Data(base64Encoded: inline, options: .ignoreUnknownCharacters) else {
                 throw KubernetesError.invalidConfiguration(
-                    reason: "This context's \(field) is not valid base64."
+                    reason: "This cluster connection's \(field) is not valid base64."
                 )
             }
             return decoded
@@ -423,7 +415,7 @@ public struct KubeconfigImporter: Sendable {
             return try fileReader.contents(ofPath: path, relativeTo: sourceDirectory)
         }
         throw KubernetesError.invalidConfiguration(
-            reason: "This context authenticates with a client certificate but carries no \(field)."
+            reason: "This cluster authenticates with a client certificate but carries no \(field)."
         )
     }
 

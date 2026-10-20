@@ -44,6 +44,10 @@ targets:
     sources:
       - path: App/Sources
       - path: App/Resources
+        excludes:
+          - LaunchScreen.storyboard
+      - path: App/Resources/LaunchScreen.storyboard
+        destinationFilters: [iOS]
     dependencies:
       - package: CodeEditorView
         product: CodeEditorView
@@ -80,7 +84,7 @@ targets:
         # The app holds no background modes: watches and logs are foreground-only
         # on iOS and iPadOS (PRD §10).
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        "INFOPLIST_KEY_UILaunchStoryboardName[sdk=iphone*]": LaunchScreen
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: >-
           UIInterfaceOrientationPortrait
           UIInterfaceOrientationLandscapeLeft
@@ -101,6 +105,8 @@ targets:
       - target: Tsubame
       - package: KubeKit
         product: KubeTestSupport
+      - package: KubeKit
+        product: KubeKeychain
       - package: KubeKit
         product: KubeKit
       - package: KubeKit

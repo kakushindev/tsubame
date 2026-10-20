@@ -50,7 +50,7 @@ struct ClusterConnectionsView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Your clusters").font(.title.weight(.semibold))
-                    Text("Choose a context to connect.").foregroundStyle(.secondary)
+                    Text("Choose a cluster to connect.").foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)
                 if model.isSaving { ProgressView().controlSize(.small) }
@@ -64,8 +64,8 @@ struct ClusterConnectionsView: View {
                 Button { model.loadDiscoveredConfigurations(refresh: true) } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .help("Refresh discovered contexts")
-                .accessibilityLabel("Refresh discovered contexts")
+                .help("Refresh discovered clusters")
+                .accessibilityLabel("Refresh discovered clusters")
             }
             .disabled(model.isSaving)
         }
@@ -83,7 +83,7 @@ struct ClusterConnectionsView: View {
             HStack {
                 Text("Credentials are saved only when you connect.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Load Contexts") {
+                Button("Load Clusters") {
                     model.importKubeconfig(text: pastedText)
                     if case .choosingContext = model.importState { showingPaste = false }
                 }
@@ -96,18 +96,18 @@ struct ClusterConnectionsView: View {
     @ViewBuilder private var contextBrowser: some View {
         if model.availableContexts.isEmpty {
             ContentUnavailableView {
-                Label("No contexts found", systemImage: "point.3.connected.trianglepath.dotted")
+                Label("No clusters found", systemImage: "point.3.connected.trianglepath.dotted")
             } description: {
-                Text("Import a kubeconfig file or paste one to see its contexts here.")
+                Text("Import a kubeconfig file or paste one to see its clusters here.")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if sizeClass != .compact && !typeSize.isAccessibilitySize {
             Table(model.availableContexts.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
-                TableColumn("Context", value: \.name) { context in
+                TableColumn("Cluster", value: \.name) { context in
                     Label(context.name, systemImage: context.summary.isCurrent ? "circle.inset.filled" : "circle")
-                        .help(context.summary.isCurrent ? "Current context in this file" : context.name)
+                        .help(context.summary.isCurrent ? "Current cluster connection in this file" : context.name)
                 }.width(min: 150, ideal: 220)
-                TableColumn("Cluster", value: \.cluster).width(min: 110, ideal: 180)
+                TableColumn("Cluster entry", value: \.cluster).width(min: 110, ideal: 180)
                 TableColumn("Server", value: \.server).width(min: 150, ideal: 240)
                 TableColumn("Namespace", value: \.namespace).width(min: 100, ideal: 130)
                 TableColumn("Source", value: \.sourceLabel).width(min: 120, ideal: 170)
@@ -160,12 +160,12 @@ struct ClusterConnectionsView: View {
                 switch plan.support {
                 case .supported: EmptyView()
                 case .requiresApproval:
-                    Text("This context uses an exec credential plugin. Plugin approval is not available in this build; no command will run.").font(.callout)
+                    Text("This cluster uses an exec credential plugin. Plugin approval is not available in this build; no command will run.").font(.callout)
                 case .needsSetup(let reason): Text(reason).font(.callout)
                 case .unsupported(_, _, let reason): Text(reason).font(.callout)
                 }
             } else {
-                Text("Select a context to see its connection details.").foregroundStyle(.secondary)
+                Text("Select a cluster to see its connection details.").foregroundStyle(.secondary)
             }
         }
         .padding(20)

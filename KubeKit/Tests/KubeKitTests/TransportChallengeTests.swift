@@ -5,6 +5,20 @@ import KubeModels
 
 @Suite("Transport authentication challenges")
 struct TransportChallengeTests {
+    @Test("An unsolicited URLSession cancellation is a visible connection failure")
+    func unsolicitedCancellation() {
+        #expect(!URLSessionTransport.isCancellation(URLError(.cancelled)))
+        #expect(!URLSessionTransport.isCancellation(CancellationError()))
+    }
+
+    @Test("Cancellation of the owning task remains cancellation")
+    func owningTaskCancellation() async {
+        let result = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return URLSessionTransport.isCancellation(URLError(.cancelled))
+        }.value
+        #expect(result)
+    }
     private func transport(tls: TLSConfiguration = .systemDefault) -> URLSessionTransport {
         URLSessionTransport(
             serverURL: URL(string: "https://cluster.example:6443")!,

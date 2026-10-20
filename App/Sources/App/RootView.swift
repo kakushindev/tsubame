@@ -16,7 +16,30 @@ struct RootView: View {
     }
 
     private var workspace: some View {
-        WorkspaceView(clusters: ClusterListModel(environment: environment), environment: environment)
+        StartupWorkspace(environment: environment)
+    }
+}
+
+/// Keep the placeholder visible while local configuration is prepared. Cluster
+/// connections retain their own loading/error states after the workspace opens.
+private struct StartupWorkspace: View {
+    let environment: AppEnvironment
+    @State private var clusters: ClusterListModel?
+
+    var body: some View {
+        Group {
+            if let clusters {
+                WorkspaceView(clusters: clusters, environment: environment)
+            } else {
+                SplashScreen()
+                    .task {
+                        let model = ClusterListModel(environment: environment)
+                        model.loadDiscoveredConfigurations()
+                        guard !Task.isCancelled else { return }
+                        clusters = model
+                    }
+            }
+        }
     }
 }
 
@@ -57,7 +80,11 @@ struct WorkspaceView: View {
 
     private enum PendingSelection {
         case context(String), tab(String), resource(UUID, DiscoveredResource), close(String)
-        case disconnect(UUID)
+        case disconnect(UUID), connection(UUID)
+    }
+    private struct DiscoveryTaskID: Equatable {
+        let session: UUID?
+        let isActive: Bool
     }
     /// Only confirmations present modally now. A delete or a scale is exactly the
     /// case a modal is for: it wants protected focus and a deliberate answer.
@@ -77,7 +104,9 @@ struct WorkspaceView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
-            navigator.navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 400)
+            navigator
+                .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 400)
+                .toolbar(removing: usesTouchNavigation && sizeClass == .regular ? .sidebarToggle : nil)
         } detail: {
             VStack(spacing: 0) {
                 #if DEBUG
@@ -111,19 +140,26 @@ struct WorkspaceView: View {
                     }
                 }
             }
+            #if os(iOS)
+            // Fix the title region for every workspace state, including failures
+            // where no resource list is mounted to supply its own title mode.
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                // Keep one explicit iPad toggle, including when portrait hides
+                // the sidebar. Suppress the generated duplicate in that column.
                 if usesTouchNavigation && sizeClass == .regular {
                     ToolbarItem(placement: .navigation) {
-                        Button(columnVisibility == .all ? "Hide Navigator" : "Show Navigator", systemImage: "sidebar.left") {
+                        Button(columnVisibility == .all ? "Hide Clusters" : "Show Clusters", systemImage: "sidebar.left") {
                             if columnVisibility == .all { columnVisibility = .detailOnly }
                             else { columnVisibility = .all; compactColumn = .sidebar }
-                        }.labelStyle(.titleAndIcon)
+                        }
                     }
                 }
-                if !showingConnections && session != nil {
+                if !showingConnections && objectTarget != nil {
                     ToolbarItem(placement: .primaryAction) {
                         Button { inspecting.toggle() } label: { Image(systemName: "sidebar.right") }
-                            .disabled(objectTarget == nil).help("Toggle resource details")
+                            .help("Toggle resource details")
                             .accessibilityLabel("Toggle resource details")
                             .keyboardShortcut("i", modifiers: [.command, .option])
                     }
@@ -143,11 +179,21 @@ struct WorkspaceView: View {
         .task {
             clusters.loadDiscoveredConfigurations()
             #if DEBUG
+            #if targetEnvironment(simulator)
+            // Opt-in simulator staging reads the original host file directly;
+            // credentials are never copied into a fixture or launch argument.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let option = arguments.firstIndex(of: "--import-kubeconfig"),
+               arguments.indices.contains(option + 1) {
+                clusters.importKubeconfig(contentsOf: URL(fileURLWithPath: arguments[option + 1]))
+                showingConnections = true
+            }
+            #endif
             if previewAutoConnect { await connectSelected() }
             #endif
         }
-        .task(id: session?.id) {
-            guard let session else { return }
+        .task(id: DiscoveryTaskID(session: session?.id, isActive: scenePhase == .active)) {
+            guard scenePhase == .active, let session else { return }
             if session.catalog == nil { await session.discover() }
             guard !Task.isCancelled, kind == nil, tabs.items.allSatisfy({ $0.connectionID != session.connection.id }) else { return }
             if let resource = session.resources.first(where: { $0.kind == "Pod" && $0.groupVersion.group.isEmpty }) ?? session.resources.first {
@@ -192,19 +238,17 @@ struct WorkspaceView: View {
     private var navigator: some View {
         Group {
             if usesTouchNavigation {
-                List { Section("Contexts") { navigatorEntries } }.listStyle(.sidebar)
+                List { navigatorEntries }.listStyle(.sidebar)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        Text("Contexts").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                            .padding(.horizontal, 8).padding(.top, 12).padding(.bottom, 8)
                         navigatorEntries
                     }.padding(.horizontal, 8).padding(.bottom, 8)
                 }
                 .background(.bar)
             }
         }
-        .navigationTitle("Navigator")
+        .navigationTitle("Clusters")
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()
@@ -213,7 +257,7 @@ struct WorkspaceView: View {
                     inspecting = false
                     revealContent()
                 } label: {
-                    Label("Manage Contexts…", systemImage: "plus")
+                    Label("Manage Clusters…", systemImage: "plus")
                         .frame(maxWidth: .infinity, alignment: .leading).padding(12).contentShape(Rectangle())
                 }.buttonStyle(.plain)
             }.background(.bar)
@@ -225,21 +269,26 @@ struct WorkspaceView: View {
             if let connection = clusters.connection(forContextID: context.id), let cached = sessions[connection.id] {
                 contextTree(cached)
             } else {
-                Button {
-                    clusters.selection = context.id
-                    inspecting = false
-                    showingConnections = false
-                    requestConnect()
-                } label: {
-                    Label(context.name, systemImage: "server.rack")
-                        .padding(.leading, usesTouchNavigation ? 0 : 26)
-                        .frame(maxWidth: .infinity, minHeight: usesTouchNavigation ? nil : 24, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Connect to \(context.name)")
-                .contextMenu {
-                    contextMenuItems(connected: nil, contextID: context.id, connection: nil)
+                HStack(spacing: 0) {
+                    Button {
+                        clusters.selection = context.id
+                        inspecting = false
+                        showingConnections = false
+                        requestConnect()
+                    } label: {
+                        Label(context.name, systemImage: "server.rack")
+                            .padding(.leading, usesTouchNavigation ? 0 : 26)
+                            .frame(maxWidth: .infinity, minHeight: usesTouchNavigation ? 44 : 24, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Connect to \(context.name)")
+                    .contextMenu {
+                        contextMenuItems(connected: nil, contextID: context.id, connection: nil)
+                    }
+                    if usesTouchNavigation {
+                        contextActions(name: context.name, connected: nil, contextID: context.id, connection: nil)
+                    }
                 }
             }
         }
@@ -250,7 +299,7 @@ struct WorkspaceView: View {
             if let cached = sessions[connection.id] { contextTree(cached) }
         }
         if clusters.availableContexts.isEmpty && clusters.connections.isEmpty {
-            Text("Import a kubeconfig to see your contexts here.").font(.callout).foregroundStyle(.secondary)
+            Text("Import a kubeconfig to see your clusters here.").font(.callout).foregroundStyle(.secondary)
         }
     }
 
@@ -360,6 +409,20 @@ struct WorkspaceView: View {
         }
     }
 
+    private func contextActions(
+        name: String, connected: ClusterSession?, contextID: String?, connection: ClusterConnection?
+    ) -> some View {
+        Menu {
+            contextMenuItems(connected: connected, contextID: contextID, connection: connection)
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .accessibilityLabel("Actions for \(name)")
+    }
+
     /// A context's name, its state, and nothing else.
     @ViewBuilder private func contextRowLabel(_ cached: ClusterSession) -> some View {
         Label {
@@ -461,11 +524,19 @@ struct WorkspaceView: View {
             }
         } label: {
             HStack(spacing: 0) {
-                contextRowLabel(cached)
+                Button {
+                    request(.connection(cached.connection.id), target: cached.connection.id)
+                } label: {
+                    contextRowLabel(cached)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 if cached.state == .failed {
                     Spacer(minLength: 8)
                     retryButton(cached)
                 }
+                contextActions(name: cached.connection.contextName, connected: cached, contextID: nil, connection: cached.connection)
             }
             .contextMenu {
                 contextMenuItems(connected: cached, contextID: nil, connection: cached.connection)
@@ -503,7 +574,7 @@ struct WorkspaceView: View {
                         .accessibilityLabel("Close \(ResourceKindPresentation.name(tab.resource)) · \(tab.contextName)")
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(selected ? .primary : .secondary)
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
                     .background(selected ? AnyShapeStyle(.background) : AnyShapeStyle(.bar))
                     .overlay(alignment: .bottom) { if selected { Rectangle().fill(.tint).frame(height: 2) } }
                     Divider()
@@ -526,9 +597,9 @@ struct WorkspaceView: View {
             ContentUnavailableView {
                 Label("No clusters yet", systemImage: "point.3.connected.trianglepath.dotted")
             } description: {
-                Text("Import a kubeconfig to see your contexts.")
+                Text("Import a kubeconfig to see your clusters.")
             } actions: {
-                Button("Manage Contexts…") {
+                Button("Manage Clusters…") {
                     showingConnections = true
                     revealContent()
                 }
@@ -537,7 +608,7 @@ struct WorkspaceView: View {
             ContentUnavailableView {
                 Label("Not connected", systemImage: "point.3.connected.trianglepath.dotted")
             } description: {
-                Text("Choose a context in the sidebar to connect.")
+                Text("Choose a cluster in the sidebar to connect.")
             }
         }
     }
@@ -574,7 +645,7 @@ struct WorkspaceView: View {
             }
         } else if session.catalog != nil {
             ContentUnavailableView("Choose a resource kind", systemImage: "square.stack",
-                                   description: Text("Open a resource from the navigator to create a tab."))
+                                   description: Text("Open a resource from the Clusters sidebar to create a tab."))
         } else { ProgressView("Discovering resources…").frame(maxWidth: .infinity, maxHeight: .infinity) }
     }
 
@@ -610,6 +681,8 @@ struct WorkspaceView: View {
     private func perform(_ action: PendingSelection) {
         switch action {
         case .context(let id): clusters.selection = id; Task { await connectSelected() }
+        case .connection(let id):
+            if let cached = sessions[id] { activate(cached.connection) }
         case .tab(let id): tabs.select(id); activateSelectedTab()
         case .resource(let id, let resource):
             if let cached = sessions[id] { openResource(resource, in: cached) }
@@ -675,6 +748,13 @@ struct WorkspaceView: View {
     }
     private func connectSelected() async {
         if let connection = await clusters.connectSelectedContext() { activate(connection) }
+        else {
+            // Unsupported mobile auth and import failures need a visible answer
+            // when Connect came from a navigator row instead of the settings.
+            showingConnections = true
+            inspecting = false
+            revealContent()
+        }
     }
     private func activate(_ connection: ClusterConnection) {
         let cached: ClusterSession

@@ -131,7 +131,7 @@ final class ClusterListModel {
         do {
             let document = try parser.parse(text)
             guard !document.contextSummaries.isEmpty else {
-                throw KubernetesError.invalidConfiguration(reason: "That kubeconfig contains no contexts.")
+                throw KubernetesError.invalidConfiguration(reason: "That kubeconfig contains no cluster connections.")
             }
             if let previous = documents[sourceID], previous != document {
                 for entry in availableContexts where entry.sourceID == sourceID { savedContexts[entry.id] = nil }

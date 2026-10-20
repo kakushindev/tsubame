@@ -20,6 +20,7 @@ struct WorkflowPreview: View {
         let target = WriteTarget(resource: resource, namespace: "default", name: "example-api")
         let raw = try! ManifestParser().parse(Self.manifest)
         switch mode {
+        case "--preview-splash": SplashScreen()
         case "--preview-connections": WorkspacePreview(connected: false)
         case "--preview-workspace": WorkspacePreview(connected: true)
         case "--preview-logs":

@@ -55,6 +55,13 @@ shared state goes through `AppEnvironment` or `NavigationModel`.
 
 ## The composition root
 
+`RootView` retains the window's cluster model after local startup. While preparing
+it, `SplashScreen` shows a centered Tsubame text placeholder. The iOS-only
+`LaunchScreen.storyboard` matches that placeholder before SwiftUI starts and is
+filtered out of macOS resources in `project.yml`. Startup adds no timed delay and
+does not wait for cluster API discovery. `--preview-splash` is a Debug-only static
+preview for checking the placeholder at different device sizes and appearances.
+
 `AppEnvironment` builds every collaborator and hands them out. Feature models take
 their dependencies through `init`, never from a singleton or a global.
 
@@ -117,6 +124,15 @@ root. `KubeconfigDiscovery` is the pattern: a protocol, a macOS implementation, 
 iOS implementation that reports nothing, and one `#if` in `AppEnvironment` that
 picks between them. Feature code contains no `#if os(...)`.
 
+`ClientIdentityStore` imports client certificates on every platform. macOS uses
+`SecItemImport`; iOS converts RSA PKCS#1/PKCS#8 or NIST EC SEC1/PKCS#8 keys into
+Security's native representation. It verifies the certificate/key pair before
+mutation and stores keys, certificates and context-reference records only in the
+Keychain. Reference records preserve certificate chains and let multiple contexts
+share an identity; removing one reference preserves items still in use. Failed
+replacement leaves the previous identity intact. Encrypted keys need a future
+passphrase workflow and are rejected explicitly.
+
 ## Project generation
 
 `project.yml` is the source of truth; `Tsubame.xcodeproj` is generated and git-ignored.
@@ -138,8 +154,10 @@ compares a fresh dry-run against the reviewed proposal before sending it.
 The composition root presents logs, editor and action screens. `ClusterSession`
 provides the per-context client, discovery and writer. Feature async work lives in
 cancellable view tasks or a model-owned task. Context/namespace identities rebuild
-those subtrees, and foreground resume opens a new list/watch. Detail is an
-explicitly timestamped GET snapshot, not a claimed live view.
+those subtrees, and foreground resume opens a new list/watch. An open inspector
+uses a name-filtered generic list/watch so metadata and raw YAML follow changes
+for built-in and custom kinds. It uses the registry's polling fallback only when
+discovery says watch is unavailable, and always displays freshness and failures.
 
 `EditorDraftStore` lives per window and keeps unfinished YAML only in memory,
 keyed by cluster and target. `YAMLSourceEditor` alone imports CodeEditorView;
@@ -157,8 +175,12 @@ name. Reopening it restores its namespace and search text; it retains neither
 an inactive watcher nor resource payloads. Only the selected tab instantiates
 `ResourceListView` and its cancellable list/watch task. Tab or namespace changes
 replace that subtree and clear the inspector selection; backgrounding removes
-the list and foreground resume starts a new list/watch. The inspector owns an
-explicitly refreshed GET snapshot. Switching to a different connection through
+the list and foreground resume starts a new list/watch. The inspector owns a
+separate watch for the selected object's name, cancelled on close, selection
+change or backgrounding; foreground resume relists. Deletion clears its action
+payload, while a denied/dropped watch retains the last data with its failure and
+non-live freshness. Live changes never overwrite an editor's draft.
+Switching to a different connection through
 the navigator, tabs, closing the selected tab or Connect still passes through
 the window's pending-draft guard.
 
@@ -171,6 +193,15 @@ reuse its imported connection. If the parsed source changes, its saved-context
 association is invalidated; a subsequent Connect creates a new connection while
 already-open sessions keep their original target. Connections and tabs are not
 persisted. Credential deletion and connection removal remain outstanding.
+
+`ClusterSession` bounds initial API discovery to 15 seconds. Its deadline cancels
+the task-group child waiting for the shared discovery task; that child's
+cancellation handler invalidates discovery and cancels its network request.
+Cancelling only the outer session task would leave the deadline waiting for the
+shared task to finish. Retry clears the failed state and starts fresh discovery.
+The view also keys discovery to foreground state, so returning to the app restarts
+an interrupted initial read. Only cancellation of the owning task is silent:
+an unsolicited network cancellation is a visible connection failure.
 
 `ClusterConnectionsView` is an in-window destination, with a context table/row
 list, inline paste editor and file picker. Resource browsing uses dynamic native

@@ -65,11 +65,14 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
       (macOS; iOS copies the value once and warns that it will expire)
 - [x] `CredentialStore` protocol and `EphemeralCredentialStore`
 - [x] `KeychainCredentialStore` (device-only, available after first unlock)
-- [x] Client-certificate provider: PEM import to a `SecIdentity` (macOS).
+- [x] Client-certificate provider: PEM import to a `SecIdentity` on macOS, iOS and iPadOS.
       `SecItemImport` reads RSA PKCS#1, RSA PKCS#8 and EC SEC1; an EC key in
       PKCS#8 is rebuilt as SEC1 first (`PrivateKeyPEM`). The key must be stored
       with `kSecAttrApplicationLabel` set to its public-key hash or no identity
       can ever be formed, however well both items store.
+- [x] Mobile RSA PKCS#1/PKCS#8 and EC SEC1/PKCS#8 import (P-256/P-384/P-521),
+      certificate/key matching, device-only Keychain storage, certificate chains,
+      shared-context references and failed replacement preserving an existing identity
 - [x] OIDC provider: authorization code + PKCE, single-flight refresh, expiry a
       minute early. The header carries the **ID token**, not the access token
 - [x] Exec credential plugin runner in its own `KubeExec` target (macOS only),
@@ -119,6 +122,8 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 - [x] `AppEnvironment` composition root with live and in-memory variants
 - [x] `RootView` adaptive split view
+- [x] Adaptive Tsubame text placeholder during local startup, with a matching
+      native iPhone/iPad launch screen; no artificial minimum display time
 - [x] Window-local context/resource navigator and resource tabs with independent
       namespace/search state; only the active tab owns a watcher
 - [x] `NavigationModel` with explicit cluster and namespace selection
@@ -126,6 +131,12 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [ ] macOS menu commands and keyboard shortcuts (PRD §10)
 - [ ] Persisted cluster list (connections only; credentials stay in the Keychain)
 - [x] Scene lifecycle: cancel watches on background, relist and reconnect on resume
+- [x] Discovery deadline cancels the underlying shared request, reports a failure,
+      and permits retry; context-switch cancellation does not report a false failure
+- [x] Unsolicited request cancellation is a visible failure; foreground resume
+      restarts initial discovery interrupted by backgrounding
+- [x] Single iPad navigator toggle, tappable connected context names and explicit
+      touch action menus; failed navigator imports open their connection details
 
 ### Clusters
 
@@ -154,6 +165,8 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [ ] Explicit empty, loading, permission-denied, partial, and error states
 - [ ] Resource detail: metadata, status, labels, annotations, owner references
 - [x] Raw YAML view preserving the API representation
+- [x] Open inspector follows name-filtered list/watch updates, deletion and
+      recreation, displays freshness/denials, and relists on foreground resume
 - [x] Secret detail decoding text values and leaving binary values as base64
 - [x] CRD discovery, schema-driven columns where a usable schema exists,
       generic fallback

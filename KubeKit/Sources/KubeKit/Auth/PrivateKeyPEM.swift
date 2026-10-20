@@ -75,6 +75,34 @@ public enum PrivateKeyPEM {
         return Data(base64Encoded: base64)
     }
 
+    /// The RSA representation Security accepts on iOS: a PKCS#1 key, with a
+    /// PKCS#8 wrapper removed only after checking its algorithm identifier.
+    public static func rsaPKCS1DER(_ pem: String) throws -> Data {
+        guard let der = body(of: pem) else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key is not valid base64.")
+        }
+        if format(of: pem) == .rsaPKCS1 { return der }
+        guard format(of: pem) == .pkcs8 else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key is not an unencrypted RSA key.")
+        }
+        var outer = DERReader(der)
+        guard let sequence = outer.readElement(), sequence.tag == .sequence else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key has an invalid PKCS#8 structure.")
+        }
+        var contents = DERReader(sequence.body)
+        guard let version = contents.readElement(), version.tag == .integer,
+              let algorithm = contents.readElement(), algorithm.tag == .sequence,
+              let key = contents.readElement(), key.tag == .octetString else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key has an invalid PKCS#8 structure.")
+        }
+        var identifier = DERReader(algorithm.body)
+        guard let oid = identifier.readElement(), oid.tag == .objectIdentifier,
+              oid.body == Data([0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01]) else {
+            throw KubernetesError.invalidConfiguration(reason: "The client key does not use the RSA algorithm.")
+        }
+        return key.body
+    }
+
     static func encode(_ der: Data, label: String) -> String {
         let base64 = der.base64EncodedString(
             options: [.lineLength64Characters, .endLineWithLineFeed]

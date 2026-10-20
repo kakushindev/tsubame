@@ -10,6 +10,11 @@ struct ResourceDetailView: View {
     var close: (() -> Void)? = nil
     @State private var pane = Pane.overview
     @State private var refreshID = UUID()
+    @Environment(\.scenePhase) private var scenePhase
+    private struct WatchTaskID: Equatable {
+        let refresh: UUID
+        let isActive: Bool
+    }
     private enum Pane: String, CaseIterable { case overview = "Overview", yaml = "YAML" }
 
     var body: some View {
@@ -26,7 +31,10 @@ struct ResourceDetailView: View {
                 overview
             }
         }
-        .task(id: refreshID) { await model.load() }
+        .task(id: WatchTaskID(refresh: refreshID, isActive: scenePhase == .active)) {
+            guard scenePhase == .active else { model.pause(); return }
+            await model.run()
+        }
     }
 
     private var header: some View {
@@ -46,6 +54,11 @@ struct ResourceDetailView: View {
             }
             Text("\(cluster) · \(model.target.namespace ?? "Cluster scope")")
                 .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            FreshnessIndicator(freshness: model.freshness)
+            if let failure = model.failure {
+                Label(failure, systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(.red).textSelection(.enabled)
+            }
             if let object = model.object {
                 HStack {
                     Button("Edit YAML", systemImage: "square.and.pencil") { perform(.edit, object) }
@@ -77,9 +90,6 @@ struct ResourceDetailView: View {
     private var overview: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if let failure = model.failure {
-                    Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
-                }
                 if let object = model.object {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Metadata").font(.headline)
@@ -116,10 +126,6 @@ struct ResourceDetailView: View {
                                 }
                             }
                         }
-                    }
-                    if let loadedAt = model.loadedAt {
-                        Text("Snapshot loaded \(loadedAt.formatted(date: .omitted, time: .standard)). Refresh to check for changes.")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                 } else if model.failure == nil { ProgressView("Loading resource…") }
             }

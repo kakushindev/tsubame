@@ -213,17 +213,15 @@ struct KubeconfigImporterTests {
         #expect(!request.isInstalled)
     }
 
-    @Test("Client certificates are macOS-only in this release")
-    func clientCertificateIsDesktopOnly() throws {
+    @Test("Client certificates are supported on macOS and iOS")
+    func clientCertificateIsSupportedOnBothPlatforms() throws {
         let user = KubeconfigUser(clientCertificateData: "Y2VydA==", clientKeyData: "a2V5")
         #expect(try importer(platform: .macOS)
             .plan(contextNamed: "prod-admin", in: kubeconfig(user: user)).support.isUsableNow)
 
         let mobile = try importer(platform: .iOS)
             .plan(contextNamed: "prod-admin", in: kubeconfig(user: user))
-        guard case .unsupported = mobile.support else {
-            Issue.record("iOS does not support client certificates yet"); return
-        }
+        #expect(mobile.support.isUsableNow)
     }
 
     @Test("A user with no usable credential is refused with a reason")
@@ -360,8 +358,8 @@ struct KubeconfigImporterTests {
 
     // MARK: - Client certificates
 
-    @Test("Importing a client-certificate context stores the identity")
-    func importsClientIdentity() async throws {
+    @Test("Importing a client-certificate context stores the identity", arguments: [HostPlatform.macOS, .iOS])
+    func importsClientIdentity(platform: HostPlatform) async throws {
         // Every context in a k3s or kubeadm kubeconfig authenticates this way. When
         // the import stored nothing, the context imported cleanly, presented no
         // certificate, and the server closed the connection — which surfaced as a
@@ -371,7 +369,7 @@ struct KubeconfigImporterTests {
             clientCertificateData: Data("CERT-PEM".utf8).base64EncodedString(),
             clientKeyData: Data("KEY-PEM".utf8).base64EncodedString()
         ))
-        let importer = importer(identities: identities)
+        let importer = importer(identities: identities, platform: platform)
         let plan = try importer.plan(contextNamed: "prod-admin", in: config)
 
         let connection = try await importer.import(plan, from: config)

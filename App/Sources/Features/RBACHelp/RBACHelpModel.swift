@@ -45,7 +45,7 @@ final class RBACHelpModel {
         [
             Workflow(
                 id: "browse", title: "Browse resources",
-                detail: "Listing and watching the kinds in the navigator.",
+                detail: "Listing and watching the resource kinds in the Clusters sidebar.",
                 attributes: Self.browse(in: namespace)
             ),
             Workflow(
