@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/branding/mark-white.svg">
+  <img src="docs/branding/mark.svg" width="80" height="80" alt="Tsubame block-T logo">
+</picture>
+
 # Tsubame
 
 A native Kubernetes management app for macOS, iPadOS, and iOS, built from one shared
@@ -109,6 +114,7 @@ for YAML.
 
 - [PRD.md](PRD.md) — source of truth for scope, behavior, and constraints
 - [PRODUCT.md](PRODUCT.md) — product framing, users, and positioning
+- [docs/branding/README.md](docs/branding/README.md) — logo set, app icons, and usage
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — structure and the rules that keep it
 - [docs/IMPLEMENTATION_CHECKLIST.md](docs/IMPLEMENTATION_CHECKLIST.md) — what exists, what doesn't
 - [AGENTS.md](AGENTS.md) — guidance for AI agents working in this repository

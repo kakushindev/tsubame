@@ -20,7 +20,7 @@ struct RootView: View {
     }
 }
 
-/// Keep the placeholder visible while local configuration is prepared. Cluster
+/// Keep the brand mark visible while local configuration is prepared. Cluster
 /// connections retain their own loading/error states after the workspace opens.
 private struct StartupWorkspace: View {
     let environment: AppEnvironment

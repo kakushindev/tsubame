@@ -140,7 +140,29 @@ after Connect, and is unavailable in release or physical-device builds.
 - macOS and iOS Simulator builds passed. Inspected the actual native iPad launch
   screen, the iPhone dark preview at an enlarged text size, and the macOS preview.
   Normal iPad launch reached the workspace after the splash. Debug builds accept
-  `--preview-splash` for a static view of the placeholder.
+  `--preview-splash` for a static view of the startup screen. The block-T branding
+  update below replaces this original text placeholder.
+
+### Block-T branding — 21 October 2026
+
+- Adopted the supplied block-T artwork without changing its geometry. The SVG
+  masters and both supplied previews live in `docs/branding`, with usage and
+  regeneration instructions. The repository header adapts its mark to appearance.
+- Populated the platform app-icon catalog: opaque iOS artwork and the supplied
+  rounded Mac artwork with transparent outer padding, at every required size.
+- Replaced the startup text placeholder with a centered 128 pt vector mark,
+  black in light appearance and white in dark appearance. SwiftUI and the native
+  iPhone/iPad launch storyboard share the asset and size. The spoken label remains
+  "Tsubame is starting". No delay or animation was added.
+- Native controls and semantic status colors retain their existing presentation.
+- macOS and iOS Simulator builds passed. Inspected the Mac light startup preview,
+  iPhone 17 Pro dark preview at an accessibility text size, and iPad Pro 11-inch
+  light preview. Simulator captures are in `/tmp/tsubame-brand-review`.
+  The launch storyboard compiled; these captures show the SwiftUI startup preview,
+  not a timed capture of the native cold-launch screen. Physical-device launch
+  and full VoiceOver acceptance were not checked in this branding pass.
+- Verified the generated bundle icon references, iOS opacity, Mac transparency,
+  unchanged supplied masters/previews, and byte-for-byte stable regeneration.
 
 ### iPad navigation and discovery fixes — 20 October 2026
 

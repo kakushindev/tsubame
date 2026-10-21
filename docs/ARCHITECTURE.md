@@ -56,11 +56,14 @@ shared state goes through `AppEnvironment` or `NavigationModel`.
 ## The composition root
 
 `RootView` retains the window's cluster model after local startup. While preparing
-it, `SplashScreen` shows a centered Tsubame text placeholder. The iOS-only
-`LaunchScreen.storyboard` matches that placeholder before SwiftUI starts and is
+it, `SplashScreen` shows the centered Tsubame block-T mark. The iOS-only
+`LaunchScreen.storyboard` matches that 128 pt mark before SwiftUI starts and is
 filtered out of macOS resources in `project.yml`. Startup adds no timed delay and
 does not wait for cluster API discovery. `--preview-splash` is a Debug-only static
-preview for checking the placeholder at different device sizes and appearances.
+preview for checking the mark at different device sizes and appearances. Both
+surfaces use `BrandMark.imageset`, with black/light and white/dark vector variants.
+The supplied masters live in `docs/branding`; `scripts/generate-brand-assets.py`
+reproduces the mark image set and platform-specific `AppIcon.appiconset` PNGs.
 
 `AppEnvironment` builds every collaborator and hands them out. Feature models take
 their dependencies through `init`, never from a singleton or a global.

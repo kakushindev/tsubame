@@ -122,7 +122,9 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 
 - [x] `AppEnvironment` composition root with live and in-memory variants
 - [x] `RootView` adaptive split view
-- [x] Adaptive Tsubame text placeholder during local startup, with a matching
+- [x] Supplied block-T branding: platform-specific iOS/Mac app icons, adaptive
+      vector mark, repository logo, documented masters and asset regeneration
+- [x] Adaptive Tsubame block-T mark during local startup, with a matching
       native iPhone/iPad launch screen; no artificial minimum display time
 - [x] Window-local context/resource navigator and resource tabs with independent
       namespace/search state; only the active tab owns a watcher

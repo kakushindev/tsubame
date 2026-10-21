@@ -65,8 +65,9 @@ Lower memory, CPU, or battery use is **an unproven hypothesis, not a claim**. Do
 
 - **Publisher:** Kakushin.dev. Free, public, open source. Bundle ID `dev.kakushin.tsubame`.
 - **Name:** Tsubame (燕), the swallow. It winks at Swift, since a swift is also a bird. Write "Tsubame" in UI, code, and docs, always with a capital T and never as "TSUBAME". When both forms appear together, write "Tsubame 燕".
-- **Brand glyph:** 燕. It appears in the App Store subtitle, the About screen, marketing, and optionally the macOS menu bar.
-- **Wordmark:** the Latin "Tsubame" is the primary wordmark, with 燕 as an optional secondary mark beside it. The kanji uses one typeface weight that matches the swallow's stroke weight.
+- **Logo:** the supplied monochrome block-T is the primary brand mark. Use the unchanged SVG masters in `docs/branding`: black on light surfaces, white on dark surfaces. The platform-specific icon artwork supplies the Home Screen and Mac Dock/Finder icons. See `docs/branding/README.md` for usage and regeneration.
+- **Japanese name:** 燕 is an optional secondary name in metadata, About copy, or marketing; it does not replace the block-T logo.
+- **Wordmark:** the Latin "Tsubame" is the primary wordmark, with 燕 as an optional secondary name beside it. Use the native system typeface in the app.
 - **Glyph rendering:** 燕 renders differently under Japanese and Chinese font fallbacks. Set the language to Japanese explicitly wherever 燕 appears, in the UI and on the marketing site, so it uses the Japanese glyph form. Check rendering in the system CJK fonts on all three platforms.
 - **Tone rule (Japanese usage):** keep Japanese minimal and meaningful. 燕 appears only as the name. Don't use decorative or fake-kanji styling, and avoid "zen" marketing clichés.
 - **Visual standard (standing preference):** every screen follows the native Apple category standard, executed at full craft, with no invented visual world. The quality bar is Apple's first-party apps (Xcode, Console, Activity Monitor, Finder) for native conventions and Linear and Raycast for speed, keyboard flow, and density. Later screens inherit this standard instead of choosing a new visual direction.
@@ -79,7 +80,8 @@ Open brand items:
 ## Evidence on Hand
 
 - `PRD.md` holds product requirements, scope, risks, and research sources.
-- No code, screenshots, logo or icon files, benchmarks, users, testimonials, or press exist yet. Don't fabricate any of these, and don't claim a performance advantage.
+- The supplied block-T logo masters and reference previews are in `docs/branding`; generated app icons and adaptive marks are in the asset catalog.
+- No benchmarks, user testimonials, or press evidence have been recorded here. Don't fabricate them or claim a performance advantage.
 
 ## Product Principles
 

@@ -280,6 +280,7 @@ Avoid collecting cluster names, resource content, logs, or credentials for produ
 ### Confirmed
 
 - Kakushin.dev publishes Tsubame as a free, public, open-source app under bundle identifier `dev.kakushin.tsubame`.
+- The supplied monochrome block-T logo set is the app and repository identity. Use the platform-specific app icons and black/white standalone marks preserved in `docs/branding`.
 - macOS automatically discovers `~/.kube/config`; all platforms offer manual import, and mobile also offers guided setup.
 - macOS has the broadest authentication support. iOS/iPadOS launch support includes bearer tokens, client certificates, and supported OIDC flows.
 - YAML changes use server-side dry-run, review, then a separate live apply action.
