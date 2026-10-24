@@ -19,7 +19,11 @@ swift test   --package-path KubeKit                # run the package tests
 xcodebuild -project Tsubame.xcodeproj -scheme Tsubame -destination 'platform=macOS' build
 xcodebuild -project Tsubame.xcodeproj -scheme Tsubame -destination 'platform=macOS' test
 xcodebuild -project Tsubame.xcodeproj -scheme Tsubame -destination 'generic/platform=iOS Simulator' build
+scripts/release/build-dmg.sh v1.2.3                # universal macOS DMG into build/release/
 ```
+
+Releases are SemVer tags (`v1.2.3`, `v1.2.3-rc.1`); publishing a GitHub release runs
+`.github/workflows/release.yml`. See `docs/RELEASING.md`.
 
 Run `xcodegen generate` after adding or removing a source file; the `.xcodeproj` is a
 build artifact and is git-ignored. Edit `project.yml`, never the generated project.

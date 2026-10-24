@@ -1,0 +1,222 @@
+name: Release
+
+# Publishing a GitHub release whose tag is a SemVer version (v1.2.3, v1.2.3-beta.1)
+# tests that tag, builds the universal macOS app, packs it into a DMG and attaches
+# the DMG and its checksum to the release. A stable release then updates the
+# Homebrew cask, once a tap is configured.
+#
+# Run it by hand to rebuild the assets of an existing release; they are replaced.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild, e.g. v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.parse.outputs.tag }}
+      version: ${{ steps.parse.outputs.version }}
+      prerelease: ${{ steps.parse.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      # A tag that is not SemVer stops the release here, before anything is built.
+      # The release's pre-release flag must agree with the tag, so that v1.2.3-rc.1
+      # is never offered as the latest stable version (or the reverse).
+      - name: Parse tag
+        id: parse
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versions="$(scripts/release/version.sh "$TAG")"
+          echo "$versions"
+          tag_prerelease="$(sed -n 's/^prerelease=//p' <<<"$versions")"
+          release_prerelease="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          if [[ "$tag_prerelease" != "$release_prerelease" ]]; then
+            echo "::error::$TAG has prerelease=$tag_prerelease, but the release is marked prerelease=$release_prerelease. Fix the release's pre-release checkbox and run this workflow again."
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "$versions"
+          } >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.version.outputs.tag }}
+
+  macos-dmg:
+    name: Build macOS DMG
+    needs: [version, test]
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          # The build number is the commit count, which needs the full history.
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Install build tools
+        run: brew install xcodegen xcbeautify
+
+      # Signing and notarization switch on once these secrets exist. Without them
+      # the DMG still builds, holding an ad-hoc signed app that Gatekeeper blocks on
+      # first launch. See docs/RELEASING.md for how to create each one.
+      - name: Import signing identity
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          if [[ -z "$MACOS_CERTIFICATE_P12" ]]; then
+            echo "::warning::No signing certificate is configured. The DMG holds an ad-hoc signed, unnotarized app."
+            exit 0
+          fi
+
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+
+          certificate="$RUNNER_TEMP/certificate.p12"
+          base64 --decode <<<"$MACOS_CERTIFICATE_P12" > "$certificate"
+          security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f "$certificate"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+
+          {
+            echo "SIGNING_KEYCHAIN=$keychain"
+            echo "SIGNING_IDENTITY=$MACOS_SIGNING_IDENTITY"
+            echo "DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
+
+          if [[ -n "$NOTARY_KEY_P8" ]]; then
+            notary_key="$RUNNER_TEMP/AuthKey.p8"
+            printf '%s' "$NOTARY_KEY_P8" > "$notary_key"
+            {
+              echo "NOTARY_KEY_PATH=$notary_key"
+              echo "NOTARY_KEY_ID=$NOTARY_KEY_ID"
+              echo "NOTARY_ISSUER_ID=$NOTARY_ISSUER_ID"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::No notary key is configured. The DMG is signed but not notarized."
+          fi
+
+      - name: Build DMG
+        shell: bash
+        run: scripts/release/build-dmg.sh "$TAG"
+        env:
+          NSUnbufferedIO: YES
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" \
+            "build/release/Tsubame-$VERSION.dmg" \
+            "build/release/Tsubame-$VERSION.dmg.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          {
+            echo "### Tsubame $VERSION"
+            echo
+            echo '```'
+            cat "build/release/Tsubame-$VERSION.dmg.sha256"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$SIGNING_KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/certificate.p12"
+
+  # Updates Casks/tsubame.rb in the tap named by the HOMEBREW_TAP_REPO repository
+  # variable (e.g. kakushindev/homebrew-tap), so `brew install --cask tsubame`
+  # follows stable releases. It stays off until that variable and the
+  # HOMEBREW_TAP_TOKEN secret exist. Pre-releases never reach the cask.
+  homebrew:
+    name: Update Homebrew cask
+    needs: [version, macos-dmg]
+    if: needs.version.outputs.prerelease == 'false' && vars.HOMEBREW_TAP_REPO != ''
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          path: tsubame
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.HOMEBREW_TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      # The checksum comes from the uploaded asset, not the build job's copy, so
+      # the cask always matches what users actually download.
+      - name: Render cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Tsubame-$VERSION.dmg" \
+            --dir "$RUNNER_TEMP"
+          sha256="$(sha256sum "$RUNNER_TEMP/Tsubame-$VERSION.dmg" | cut -d ' ' -f 1)"
+          mkdir -p tap/Casks
+          sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$sha256/" \
+            tsubame/packaging/homebrew/tsubame.rb > tap/Casks/tsubame.rb
+          cat tap/Casks/tsubame.rb
+
+      - name: Push cask
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/tsubame.rb
+          if git diff --cached --quiet; then
+            echo "Cask already at $VERSION"
+            exit 0
+          fi
+          git commit -m "tsubame $VERSION"
+          git push

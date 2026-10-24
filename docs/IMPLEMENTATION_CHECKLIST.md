@@ -15,6 +15,10 @@ with no shared `Utils` or `Helpers` type introduced to hold it.
 - [x] Swift 6 language mode and complete strict concurrency in both the package and the app
 - [x] Unit test targets for the package and the app, running under Swift Testing
 - [x] Continuous integration: `xcodegen generate`, build for both platforms, run both test suites
+- [x] Release workflow: SemVer tag check, CI against the tag, universal macOS DMG attached to the GitHub release ([RELEASING.md](RELEASING.md))
+- [ ] Developer ID signing and notarization secrets configured (workflow supports them; until then DMGs are ad-hoc signed)
+- [ ] Homebrew tap `kakushindev/homebrew-tap` created and wired up (job and cask template exist, off until configured)
+- [ ] iOS/iPadOS distribution — waits on the distribution channel decision (PRD §15)
 - [ ] SwiftLint or swift-format configuration, if the project wants one
 - [ ] `LICENSE` — open decision (PRD §15)
 

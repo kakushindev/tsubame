@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # The release workflow runs this same suite against the tag before it builds.
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to test; empty means the triggering commit.
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +27,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Show toolchain
         run: |
